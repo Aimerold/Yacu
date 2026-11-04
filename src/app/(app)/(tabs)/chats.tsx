@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -6,13 +6,18 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import AppHeader from '@/components/layout/AppHeader';
+import Avatar from '@/components/ui/Avatar';
 import { getMyConversations } from '@/services/conversation.service';
 import type { ConversationSummary } from '@/services/conversation.service';
 import { subscribeToMyMessages } from '@/services/message.service';
 import { formatListTime } from '@/utils/format';
+import { colors } from '@/theme/tokens';
 
 function previewOf(conversation: ConversationSummary): string {
   const last = conversation.last_message;
@@ -24,10 +29,19 @@ function previewOf(conversation: ConversationSummary): string {
   return last.mine ? `Toi : ${text}` : text;
 }
 
+/** Minuscules et sans accents, pour une recherche tolérante. */
+function normalize(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 export default function ChatsScreen() {
   const router = useRouter();
 
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -65,6 +79,22 @@ export default function ChatsScreen() {
     }, [load])
   );
 
+  const trimmedQuery = query.trim();
+
+  const filtered = useMemo(() => {
+    const needle = normalize(trimmedQuery);
+
+    if (!needle) return conversations;
+
+    return conversations.filter((conversation) =>
+      normalize(
+        `${conversation.other_user?.display_name ?? ''} ${
+          conversation.other_user?.username ?? ''
+        }`
+      ).includes(needle)
+    );
+  }, [conversations, trimmedQuery]);
+
   function openConversation(conversationId: string) {
     router.push({
       pathname: '/chat/[conversationId]',
@@ -72,95 +102,137 @@ export default function ChatsScreen() {
     });
   }
 
+  const noResults = conversations.length > 0 && !!trimmedQuery;
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Conversations</Text>
+      <AppHeader />
 
-      {loading ? (
-        <ActivityIndicator color="#FF8A32" size="large" style={styles.loader} />
-      ) : (
-        <FlatList
-          data={conversations}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={
-            conversations.length === 0 ? styles.emptyContainer : undefined
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => load(true)}
-              tintColor="#FF8A32"
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>
-                {error || 'Aucune conversation'}
-              </Text>
-              {!error && (
-                <Text style={styles.emptyText}>
-                  Va dans Contacts, ouvre un profil et appuie sur « Envoyer un
-                  message ».
+      <View style={styles.body}>
+        <Text style={styles.title}>Conversations</Text>
+
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={colors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher une conversation..."
+            placeholderTextColor={colors.textMuted}
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {query.length > 0 && (
+            <Pressable
+              onPress={() => setQuery('')}
+              hitSlop={10}
+              accessibilityLabel="Effacer la recherche"
+            >
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+            </Pressable>
+          )}
+        </View>
+
+        {loading ? (
+          <ActivityIndicator
+            color={colors.accent}
+            size="large"
+            style={styles.loader}
+          />
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.id}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={
+              filtered.length === 0 ? styles.emptyContainer : undefined
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => load(true)}
+                tintColor={colors.accent}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyTitle}>
+                  {error ||
+                    (noResults
+                      ? `Aucun résultat pour « ${trimmedQuery} »`
+                      : 'Aucune conversation')}
                 </Text>
-              )}
-            </View>
-          }
-          renderItem={({ item }) => {
-            const name =
-              item.other_user?.display_name ||
-              item.other_user?.username ||
-              'Utilisateur';
-            const hasUnread = item.unread_count > 0;
-            const time = item.last_message
-              ? formatListTime(item.last_message.created_at)
-              : '';
-
-            return (
-              <Pressable
-                style={styles.row}
-                onPress={() => openConversation(item.id)}
-              >
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {name.charAt(0).toUpperCase()}
+                {!error && !noResults && (
+                  <Text style={styles.emptyText}>
+                    Va dans Contacts, ouvre un profil et appuie sur « Envoyer un
+                    message ».
                   </Text>
-                </View>
+                )}
+              </View>
+            }
+            renderItem={({ item }) => {
+              const name =
+                item.other_user?.display_name ||
+                item.other_user?.username ||
+                'Utilisateur';
+              const hasUnread = item.unread_count > 0;
+              const time = item.last_message
+                ? formatListTime(item.last_message.created_at)
+                : '';
 
-                <View style={styles.rowText}>
-                  <View style={styles.rowTop}>
-                    <Text style={styles.name} numberOfLines={1}>
-                      {name}
-                    </Text>
-                    {!!time && (
-                      <Text
-                        style={[styles.time, hasUnread && styles.timeUnread]}
-                      >
-                        {time}
+              return (
+                <Pressable
+                  style={styles.row}
+                  onPress={() => openConversation(item.id)}
+                >
+                  <View style={styles.avatarWrap}>
+                    <Avatar
+                      name={name}
+                      uri={item.other_user?.avatar_url}
+                      size={48}
+                    />
+                  </View>
+
+                  <View style={styles.rowText}>
+                    <View style={styles.rowTop}>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {name}
                       </Text>
-                    )}
-                  </View>
-
-                  <View style={styles.rowBottom}>
-                    <Text
-                      style={[styles.preview, hasUnread && styles.previewUnread]}
-                      numberOfLines={1}
-                    >
-                      {previewOf(item)}
-                    </Text>
-                    {hasUnread && (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>
-                          {item.unread_count > 99 ? '99+' : item.unread_count}
+                      {!!time && (
+                        <Text
+                          style={[styles.time, hasUnread && styles.timeUnread]}
+                        >
+                          {time}
                         </Text>
-                      </View>
-                    )}
+                      )}
+                    </View>
+
+                    <View style={styles.rowBottom}>
+                      <Text
+                        style={[
+                          styles.preview,
+                          hasUnread && styles.previewUnread,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {previewOf(item)}
+                      </Text>
+                      {hasUnread && (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>
+                            {item.unread_count > 99 ? '99+' : item.unread_count}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                </View>
-              </Pressable>
-            );
-          }}
-        />
-      )}
+                </Pressable>
+              );
+            }}
+          />
+        )}
+      </View>
     </View>
   );
 }
@@ -168,15 +240,36 @@ export default function ChatsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#081426',
-    paddingTop: 60,
+    backgroundColor: colors.background,
+  },
+  body: {
+    flex: 1,
     paddingHorizontal: 20,
   },
   title: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 26,
     fontWeight: '700',
-    marginBottom: 20,
+    marginTop: 14,
+    marginBottom: 14,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    minHeight: 46,
+    marginBottom: 16,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    paddingVertical: 10,
   },
   loader: {
     marginTop: 40,
@@ -184,24 +277,13 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#10223A',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#263A54',
-    alignItems: 'center',
-    justifyContent: 'center',
+  avatarWrap: {
     marginRight: 14,
-  },
-  avatarText: {
-    color: '#FF8A32',
-    fontSize: 20,
-    fontWeight: '700',
   },
   rowText: {
     flex: 1,
@@ -220,38 +302,38 @@ const styles = StyleSheet.create({
   },
   name: {
     flex: 1,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '600',
   },
   time: {
-    color: '#8493A8',
+    color: colors.textMuted,
     fontSize: 12,
     marginLeft: 8,
   },
   timeUnread: {
-    color: '#FF8A32',
+    color: colors.accent,
   },
   preview: {
     flex: 1,
-    color: '#A8B6C8',
+    color: colors.textSecondary,
     fontSize: 14,
   },
   previewUnread: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '600',
   },
   badge: {
     minWidth: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#FF8A32',
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
   },
   badgeText: {
-    color: '#081426',
+    color: colors.onAccent,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -264,13 +346,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   emptyTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
   },
   emptyText: {
-    color: '#A8B6C8',
+    color: colors.textSecondary,
     marginTop: 10,
     textAlign: 'center',
   },

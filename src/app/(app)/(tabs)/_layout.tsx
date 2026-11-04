@@ -1,32 +1,68 @@
 import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { colors } from '@/theme/tokens';
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#FF8A32',
-        tabBarInactiveTintColor: '#A8B6C8',
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
         tabBarStyle: {
-          backgroundColor: '#10223A',
-          borderTopColor: '#263C57',
+          backgroundColor: colors.surface,
+          borderTopColor: colors.tabBorder,
         },
       }}
     >
       <Tabs.Screen
         name="chats"
-        options={{ title: 'Chats', tabBarLabel: 'Chats' }}
+        options={{
+          title: 'Chats',
+          tabBarLabel: 'Chats',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'chatbubbles' : 'chatbubbles-outline'}
+              size={size}
+              color={color as string}
+            />
+          ),
+        }}
       />
 
       <Tabs.Screen
         name="contacts"
-        options={{ title: 'Contacts', tabBarLabel: 'Contacts' }}
+        options={{
+          title: 'Contacts',
+          tabBarLabel: 'Contacts',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'people' : 'people-outline'}
+              size={size}
+              color={color as string}
+            />
+          ),
+        }}
       />
 
       <Tabs.Screen
-        name="profile"
-        options={{ title: 'Profil', tabBarLabel: 'Profil' }}
+        name="settings"
+        options={{
+          title: 'Paramètres',
+          tabBarLabel: 'Paramètres',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'settings' : 'settings-outline'}
+              size={size}
+              color={color as string}
+            />
+          ),
+        }}
       />
+
+      {/* Ancien onglet Profil : masqué, il redirige vers Paramètres */}
+      <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   );
 }

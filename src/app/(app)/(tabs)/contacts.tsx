@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import AppHeader from '@/components/layout/AppHeader';
 import { searchUsers } from '@/services/users.service';
 import type { Profile } from '@/services/profile.service';
 
@@ -45,78 +46,82 @@ export default function SearchScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.logo}>Yacu<Text style={styles.orange}>.</Text></Text>
-      <Text style={styles.heading}>Découvrir</Text>
-      <Text style={styles.subtitle}>
-        Recherche et découvre les membres de Yacu.
-      </Text>
+      <AppHeader />
 
-      <View style={styles.searchRow}>
-        <TextInput
-          style={styles.input}
-          placeholder="Nom ou nom d’utilisateur..."
-          placeholderTextColor="#8493A8"
-          value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-          autoCapitalize="none"
-        />
-        <Pressable
-          style={styles.searchButton}
-          onPress={handleSearch}
-          disabled={loading}
-        >
-          <Text style={styles.searchButtonText}>Chercher</Text>
-        </Pressable>
-      </View>
+      <View style={styles.body}>
+        <Text style={styles.heading}>Découvrir</Text>
+        <Text style={styles.subtitle}>
+          Recherche et découvre les membres de Yacu.
+        </Text>
 
-      {loading && <ActivityIndicator color="#FF8A32" />}
+        <View style={styles.searchRow}>
+          <TextInput
+            style={styles.input}
+            placeholder="Nom ou nom d’utilisateur..."
+            placeholderTextColor="#8493A8"
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+            autoCapitalize="none"
+          />
+          <Pressable
+            style={styles.searchButton}
+            onPress={handleSearch}
+            disabled={loading}
+          >
+            <Text style={styles.searchButtonText}>Chercher</Text>
+          </Pressable>
+        </View>
 
-      {!!errorMessage && !loading && (
-        <Text style={styles.message}>{errorMessage}</Text>
-      )}
+        {loading && <ActivityIndicator color="#FF8A32" />}
 
-      <FlatList
-        data={users}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <View style={styles.userCard}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {(item.display_name || item.username)
-                  .charAt(0)
-                  .toUpperCase()}
-              </Text>
-            </View>
-
-            <View style={styles.userInfo}>
-              <Text style={styles.displayName}>
-                {item.display_name || item.username}
-              </Text>
-              <Text style={styles.username}>@{item.username}</Text>
-              {!!item.bio && (
-                <Text style={styles.bio} numberOfLines={2}>
-                  {item.bio}
-                </Text>
-              )}
-            </View>
-
-            <Pressable
-              style={styles.profileButton}
-              onPress={() =>
-                router.push({
-                  pathname: '/user/[id]',
-                  params: { id: item.id },
-                })
-              }
-            >
-              <Text style={styles.profileButtonText}>Voir</Text>
-            </Pressable>
-          </View>
+        {!!errorMessage && !loading && (
+          <Text style={styles.message}>{errorMessage}</Text>
         )}
-      />
+
+        <FlatList
+          data={users}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item }) => (
+            <View style={styles.userCard}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {(item.display_name || item.username)
+                    .charAt(0)
+                    .toUpperCase()}
+                </Text>
+              </View>
+
+              <View style={styles.userInfo}>
+                <Text style={styles.displayName}>
+                  {item.display_name || item.username}
+                </Text>
+                <Text style={styles.username}>@{item.username}</Text>
+                {!!item.bio && (
+                  <Text style={styles.bio} numberOfLines={2}>
+                    {item.bio}
+                  </Text>
+                )}
+              </View>
+
+              <Pressable
+                style={styles.profileButton}
+                onPress={() =>
+                  router.push({
+                    pathname: '/user/[id]',
+                    params: { id: item.id },
+                  })
+                }
+              >
+                <Text style={styles.profileButtonText}>Voir</Text>
+              </Pressable>
+            </View>
+          )}
+        />
+      </View>
     </View>
   );
 }
@@ -125,22 +130,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#081426',
-    padding: 22,
-    paddingTop: 60,
   },
-  logo: {
-    color: '#FFFFFF',
-    fontSize: 30,
-    fontWeight: '800',
-  },
-  orange: {
-    color: '#FF8A32',
+  body: {
+    flex: 1,
+    paddingHorizontal: 22,
   },
   heading: {
     color: '#FFFFFF',
     fontSize: 27,
     fontWeight: '700',
-    marginTop: 24,
+    marginTop: 14,
   },
   subtitle: {
     color: '#9BAAC0',
