@@ -1,0 +1,324 @@
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { getMyProfile, updateMyProfile } from '@/services/profile.service';
+
+const colors = {
+  background: '#081426',
+  surface: '#10223A',
+  input: '#172B45',
+  orange: '#FF8A32',
+  white: '#FFFFFF',
+  muted: '#A8B6C8',
+};
+
+function isDuplicateUsernameError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === '23505'
+  );
+}
+
+export default function ProfileEditScreen() {
+  const router = useRouter();
+  const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [bio, setBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadProfile() {
+      try {
+        const profile = await getMyProfile();
+
+        if (active) {
+          setUsername(profile.username);
+          setDisplayName(profile.display_name);
+          setBio(profile.bio);
+          setAvatarUrl(profile.avatar_url);
+          setProfileLoaded(true);
+        }
+      } catch (error) {
+        console.error('Erreur de chargement du profil à modifier :', error);
+
+        if (active) {
+          setErrorMessage('Impossible de charger ton profil. Réessaie plus tard.');
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleSave() {
+    setErrorMessage('');
+
+    if (!profileLoaded) return;
+
+    const cleanUsername = username.trim().toLowerCase();
+    const cleanDisplayName = displayName.trim();
+
+    if (!/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
+      setErrorMessage(
+        'Le nom utilisateur doit contenir 3 à 20 caractères : lettres, chiffres ou _.'
+      );
+      return;
+    }
+
+    if (!cleanDisplayName) {
+      setErrorMessage('Saisis ton nom d’affichage.');
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await updateMyProfile({
+        username: cleanUsername,
+        display_name: cleanDisplayName,
+        bio: bio.trim(),
+        avatar_url: avatarUrl,
+      });
+      router.back();
+    } catch (error) {
+      console.error('Erreur de mise à jour du profil :', error);
+      setErrorMessage(
+        isDuplicateUsernameError(error)
+          ? 'Ce nom utilisateur est déjà utilisé.'
+          : 'Impossible d’enregistrer ton profil. Vérifie ta connexion et réessaie.'
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.content}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Text style={styles.backText}>← Retour</Text>
+          </Pressable>
+
+          <View style={styles.card}>
+            <Text style={styles.heading}>Modifier mon profil</Text>
+            <Text style={styles.subtitle}>
+              Mets à jour les informations visibles sur ton profil.
+            </Text>
+
+            {loading ? (
+              <ActivityIndicator
+                color={colors.orange}
+                size="large"
+                style={styles.loader}
+              />
+            ) : !profileLoaded ? (
+              <>
+                <Text accessibilityRole="alert" style={styles.error}>
+                  {errorMessage}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.back()}
+                  style={styles.secondaryButton}
+                >
+                  <Text style={styles.secondaryButtonText}>Retour</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={styles.label}>Nom d’affichage</Text>
+                <TextInput
+                  accessibilityLabel="Nom d’affichage"
+                  autoCapitalize="words"
+                  editable={!saving}
+                  onChangeText={setDisplayName}
+                  placeholder="Ton nom"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={displayName}
+                />
+
+                <Text style={styles.label}>Nom utilisateur</Text>
+                <TextInput
+                  accessibilityLabel="Nom utilisateur"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!saving}
+                  onChangeText={setUsername}
+                  placeholder="exemple : aimerold"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={username}
+                />
+
+                <Text style={styles.label}>Biographie</Text>
+                <TextInput
+                  accessibilityLabel="Biographie"
+                  editable={!saving}
+                  multiline
+                  onChangeText={setBio}
+                  placeholder="Quelques mots sur toi..."
+                  placeholderTextColor={colors.muted}
+                  style={[styles.input, styles.bioInput]}
+                  textAlignVertical="top"
+                  value={bio}
+                />
+
+                {!!errorMessage && (
+                  <Text accessibilityRole="alert" style={styles.error}>
+                    {errorMessage}
+                  </Text>
+                )}
+
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={saving}
+                  onPress={handleSave}
+                  style={[styles.saveButton, saving && styles.disabledButton]}
+                >
+                  {saving ? (
+                    <ActivityIndicator color={colors.background} />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Enregistrer</Text>
+                  )}
+                </Pressable>
+              </>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
+  },
+  content: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+    width: '100%',
+    maxWidth: 568,
+    alignSelf: 'center',
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+    marginBottom: 20,
+  },
+  backText: {
+    color: colors.orange,
+    fontSize: 16,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    padding: 24,
+  },
+  heading: {
+    color: colors.white,
+    fontSize: 25,
+    fontWeight: '800',
+  },
+  subtitle: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  label: {
+    color: colors.white,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginTop: 14,
+  },
+  input: {
+    backgroundColor: colors.input,
+    borderColor: '#263A54',
+    borderRadius: 12,
+    borderWidth: 1,
+    color: colors.white,
+    minHeight: 48,
+    paddingHorizontal: 14,
+  },
+  bioInput: {
+    minHeight: 112,
+    paddingTop: 12,
+  },
+  loader: {
+    marginVertical: 24,
+  },
+  error: {
+    color: '#FF8A8A',
+    lineHeight: 20,
+    marginTop: 16,
+  },
+  saveButton: {
+    alignItems: 'center',
+    backgroundColor: colors.orange,
+    borderRadius: 12,
+    justifyContent: 'center',
+    marginTop: 24,
+    minHeight: 48,
+    paddingHorizontal: 16,
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  saveButtonText: {
+    color: colors.background,
+    fontWeight: '700',
+  },
+  secondaryButton: {
+    alignItems: 'center',
+    borderColor: '#263A54',
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
+    marginTop: 12,
+    minHeight: 48,
+  },
+  secondaryButtonText: {
+    color: colors.white,
+    fontWeight: '600',
+  },
+});
