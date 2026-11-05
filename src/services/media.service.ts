@@ -171,3 +171,14 @@ export async function getDownloadUrl(path: string): Promise<string> {
 
   return data.signedUrl;
 }
+
+/** Supprime une image du stockage (appelé après la suppression du message). */
+export async function removeChatImage(path: string): Promise<void> {
+  const { error } = await supabase.storage
+    .from(CHAT_IMAGES_BUCKET)
+    .remove([path]);
+
+  if (error) throw new Error(error.message);
+
+  urlCache.delete(path);
+}

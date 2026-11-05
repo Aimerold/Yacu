@@ -15,11 +15,15 @@ export type Message = {
 export const MESSAGE_PAGE_SIZE = 30;
 export const MESSAGE_MAX_LENGTH = 5000;
 
+/** Durée pendant laquelle un message texte reste modifiable (identique à la fonction SQL). */
+export const EDIT_WINDOW_MINUTES = 15;
+
 const MESSAGE_COLUMNS =
   'id, conversation_id, sender_id, type, content, media_path, created_at, edited_at, deleted_at';
 
 /**
  * Charge une page de messages, du plus récent au plus ancien.
+ * Les messages supprimés sont inclus (affichés comme « Message supprimé »).
  * `before` : date du plus ancien message déjà chargé (pagination).
  */
 export async function getMessages(
@@ -31,7 +35,6 @@ export async function getMessages(
     .from('messages')
     .select(MESSAGE_COLUMNS)
     .eq('conversation_id', conversationId)
-    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
     .limit(limit);
@@ -110,6 +113,40 @@ export async function sendImageMessage(params: {
   });
 }
 
+/**
+ * Modifie son propre message texte (fonction serveur : expéditeur uniquement,
+ * dans la fenêtre de modification, hors blocage).
+ */
+export async function editMessage(params: {
+  id: string;
+  content: string;
+}): Promise<Message> {
+  const content = params.content.trim();
+
+  if (!content) throw new Error('Message vide.');
+  if (content.length > MESSAGE_MAX_LENGTH) throw new Error('Message trop long.');
+
+  const { data, error } = await supabase.rpc('edit_message', {
+    p_message_id: params.id,
+    p_content: content,
+  });
+
+  if (error) throw new Error(error.message);
+
+  return data as Message;
+}
+
+/** Supprime son propre message (le contenu est effacé, une trace reste). */
+export async function deleteMessage(id: string): Promise<Message> {
+  const { data, error } = await supabase.rpc('delete_message', {
+    p_message_id: id,
+  });
+
+  if (error) throw new Error(error.message);
+
+  return data as Message;
+}
+
 /** Marque la conversation comme lue pour l'utilisateur connecté. */
 export async function markConversationRead(conversationId: string): Promise<void> {
   const { error } = await supabase.rpc('mark_conversation_read', {
@@ -120,7 +157,7 @@ export async function markConversationRead(conversationId: string): Promise<void
 }
 
 /**
- * Écoute les nouveaux messages d'une conversation.
+ * Écoute les nouveaux messages ET les modifications / suppressions d'une conversation.
  * `onStatus` reçoit l'état de la connexion (SUBSCRIBED, CLOSED, CHANNEL_ERROR, TIMED_OUT).
  * Retourne une fonction de désabonnement.
  */
@@ -128,20 +165,23 @@ export function subscribeToConversationMessages(
   conversationId: string,
   handlers: {
     onInsert: (message: Message) => void;
+    onUpdate?: (message: Message) => void;
     onStatus?: (status: string) => void;
   }
 ): () => void {
+  const filter = `conversation_id=eq.${conversationId}`;
+
   const channel = supabase
     .channel(`chat:${conversationId}:${Date.now()}`)
     .on(
       'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `conversation_id=eq.${conversationId}`,
-      },
+      { event: 'INSERT', schema: 'public', table: 'messages', filter },
       (payload) => handlers.onInsert(payload.new as unknown as Message)
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'messages', filter },
+      (payload) => handlers.onUpdate?.(payload.new as unknown as Message)
     )
     .subscribe((status) => handlers.onStatus?.(status));
 

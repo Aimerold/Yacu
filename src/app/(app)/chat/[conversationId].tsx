@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -20,8 +21,11 @@ import {
 } from '@/services/conversation.service';
 import type { ConversationSummary } from '@/services/conversation.service';
 import {
+  EDIT_WINDOW_MINUTES,
   MESSAGE_MAX_LENGTH,
   MESSAGE_PAGE_SIZE,
+  deleteMessage,
+  editMessage,
   getMessages,
   markConversationRead,
   sendImageMessage,
@@ -33,6 +37,7 @@ import {
   MediaError,
   buildChatImagePath,
   pickImageFromLibrary,
+  removeChatImage,
   takePhoto,
   uploadChatImage,
 } from '@/services/media.service';
@@ -41,6 +46,7 @@ import { isUserBlocked, unblockUser } from '@/services/block.service';
 import ImageMessage from '@/features/messages/components/ImageMessage';
 import ImageViewerModal from '@/features/messages/components/ImageViewerModal';
 import type { ViewerTarget } from '@/features/messages/components/ImageViewerModal';
+import MessageActionsModal from '@/features/messages/components/MessageActionsModal';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { generateId } from '@/utils/id';
 import { formatMessageTime } from '@/utils/format';
@@ -57,6 +63,7 @@ const KEYBOARD_BEHAVIOR: 'padding' | undefined = 'padding';
 const MIN_INPUT_HEIGHT = 44;
 const MAX_INPUT_HEIGHT = 132;
 const INPUT_VERTICAL_PADDING = 20;
+const EDIT_WINDOW_MS = EDIT_WINDOW_MINUTES * 60 * 1000;
 
 type ChatMessage = Message & {
   status: 'sent' | 'pending' | 'failed';
@@ -96,6 +103,43 @@ function isPermissionError(error: unknown): boolean {
   );
 }
 
+/** Un message texte envoyé par moi, non supprimé, dans le délai de modification. */
+function canEditMessage(message: ChatMessage, myId: string | null): boolean {
+  return (
+    !!myId &&
+    message.sender_id === myId &&
+    message.type === 'text' &&
+    message.status === 'sent' &&
+    !message.deleted_at &&
+    Date.now() - Date.parse(message.created_at) <= EDIT_WINDOW_MS
+  );
+}
+
+/** Mes messages envoyés (modifier / supprimer) ou en échec (retirer). */
+function canActOnMessage(message: ChatMessage, myId: string | null): boolean {
+  if (!myId || message.sender_id !== myId || message.deleted_at) return false;
+
+  return message.status === 'sent' || message.status === 'failed';
+}
+
+function editErrorMessage(error: unknown): string {
+  const text = error instanceof Error ? error.message : '';
+
+  if (text.includes('edit_window_expired')) {
+    return `Le délai de modification (${EDIT_WINDOW_MINUTES} minutes) est dépassé.`;
+  }
+
+  if (text.includes('forbidden')) {
+    return 'Tu ne peux pas modifier ce message.';
+  }
+
+  if (text.includes('not_editable')) {
+    return 'Ce message ne peut plus être modifié.';
+  }
+
+  return 'Impossible de modifier le message. Réessaie.';
+}
+
 export default function ConversationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -110,6 +154,9 @@ export default function ConversationScreen() {
   const [input, setInput] = useState('');
   const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
   const [draftImage, setDraftImage] = useState<PreparedImage | null>(null);
+  const [editing, setEditing] = useState<ChatMessage | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [actionsTarget, setActionsTarget] = useState<ChatMessage | null>(null);
   const [viewer, setViewer] = useState<ViewerTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -202,7 +249,7 @@ export default function ConversationScreen() {
     };
   }, [conversationId, markRead]);
 
-  // Temps réel
+  // Temps réel : nouveaux messages, modifications et suppressions
   useEffect(() => {
     if (!conversationId) return;
 
@@ -212,6 +259,11 @@ export default function ConversationScreen() {
           upsertMessages(previous, [{ ...message, status: 'sent' }])
         );
         markRead();
+      },
+      onUpdate: (message) => {
+        setMessages((previous) =>
+          upsertMessages(previous, [{ ...message, status: 'sent' }])
+        );
       },
       onStatus: (status) => {
         const isConnected = status === 'SUBSCRIBED';
@@ -397,6 +449,94 @@ export default function ConversationScreen() {
     void deliver(pending);
   }
 
+  // --- Modifier / supprimer -------------------------------------------------
+
+  function startEdit() {
+    const target = actionsTarget;
+
+    setActionsTarget(null);
+
+    if (!target || !canEditMessage(target, myId)) return;
+
+    setNotice('');
+    setDraftImage(null);
+    setEditing(target);
+    setInput(target.content ?? '');
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setInput('');
+    setInputHeight(MIN_INPUT_HEIGHT);
+  }
+
+  async function handleSaveEdit() {
+    if (!editing || savingEdit) return;
+
+    const content = input.trim();
+
+    if (!content) return;
+
+    if (content === (editing.content ?? '')) {
+      cancelEdit();
+      return;
+    }
+
+    setSavingEdit(true);
+    setNotice('');
+
+    try {
+      const saved = await editMessage({ id: editing.id, content });
+
+      setMessages((previous) =>
+        upsertMessages(previous, [{ ...saved, status: 'sent' }])
+      );
+      cancelEdit();
+    } catch (e) {
+      setNotice(editErrorMessage(e));
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleDelete(message: ChatMessage) {
+    setNotice('');
+
+    // Message jamais parti : on le retire simplement de l'écran.
+    if (message.status === 'failed') {
+      pendingImages.current.delete(message.id);
+      setMessages((previous) =>
+        previous.filter((item) => item.id !== message.id)
+      );
+      return;
+    }
+
+    try {
+      const saved = await deleteMessage(message.id);
+
+      setMessages((previous) =>
+        upsertMessages(previous, [{ ...saved, status: 'sent' }])
+      );
+
+      if (editing?.id === message.id) cancelEdit();
+
+      if (message.type === 'image' && message.media_path) {
+        // Nettoyage du fichier : sans gravité en cas d'échec, la trace est déjà posée.
+        void removeChatImage(message.media_path).catch(() => undefined);
+      }
+    } catch {
+      setNotice('Impossible de supprimer le message. Réessaie.');
+    }
+  }
+
+  function confirmDelete() {
+    const target = actionsTarget;
+
+    setActionsTarget(null);
+
+    if (target) void handleDelete(target);
+  }
+
   async function handleUnblock() {
     const otherId = conversation?.other_user?.id;
 
@@ -416,50 +556,86 @@ export default function ConversationScreen() {
     conversation?.other_user?.username ||
     'Conversation';
 
-  const canSend = input.trim().length > 0 && !!myId;
+  const canSend = input.trim().length > 0 && !!myId && !savingEdit;
 
   function renderMessage({ item }: { item: ChatMessage }) {
     const mine = item.sender_id === myId;
     const isImage = item.type === 'image';
+    const deleted = !!item.deleted_at;
+    const actionable = canActOnMessage(item, myId);
+    const openActions = actionable ? () => setActionsTarget(item) : undefined;
 
     return (
       <View style={[styles.row, mine ? styles.rowMine : styles.rowTheirs]}>
-        <View
-          style={[
-            styles.bubble,
-            mine ? styles.bubbleMine : styles.bubbleTheirs,
-            isImage && styles.bubbleImage,
-            item.status === 'pending' && styles.bubblePending,
-          ]}
-        >
-          {isImage ? (
-            <ImageMessage
-              mediaPath={item.media_path}
-              localUri={item.localUri}
-              onOpen={() =>
-                setViewer({
-                  mediaPath: item.media_path,
-                  localUri: item.localUri,
-                  canDownload: item.status === 'sent',
-                })
-              }
-            />
-          ) : (
-            <Text style={mine ? styles.textMine : styles.textTheirs}>
-              {item.content}
-            </Text>
+        <View style={[styles.line, mine ? styles.lineMine : styles.lineTheirs]}>
+          {actionable && Platform.OS === 'web' && (
+            <Pressable
+              onPress={openActions}
+              hitSlop={8}
+              style={styles.menuButton}
+              accessibilityLabel="Actions du message"
+            >
+              <Ionicons name="ellipsis-horizontal" size={16} color="#8493A8" />
+            </Pressable>
           )}
 
-          <Text
+          <Pressable
+            onLongPress={openActions}
+            delayLongPress={350}
             style={[
-              mine ? styles.metaMine : styles.metaTheirs,
-              isImage && styles.metaImage,
+              styles.bubble,
+              mine ? styles.bubbleMine : styles.bubbleTheirs,
+              isImage && !deleted && styles.bubbleImage,
+              item.status === 'pending' && styles.bubblePending,
             ]}
           >
-            {formatMessageTime(item.created_at)}
-            {mine && item.status === 'pending' ? ' · Envoi…' : ''}
-            {mine && item.status === 'sent' ? ' · ✓' : ''}
-          </Text>
+            {deleted ? (
+              <View style={styles.tombstone}>
+                <Ionicons
+                  name="ban-outline"
+                  size={14}
+                  color={mine ? '#5A3511' : '#8493A8'}
+                />
+                <Text
+                  style={[
+                    styles.tombstoneText,
+                    mine ? styles.tombstoneMine : styles.tombstoneTheirs,
+                  ]}
+                >
+                  Message supprimé
+                </Text>
+              </View>
+            ) : isImage ? (
+              <ImageMessage
+                mediaPath={item.media_path}
+                localUri={item.localUri}
+                onLongPress={openActions}
+                onOpen={() =>
+                  setViewer({
+                    mediaPath: item.media_path,
+                    localUri: item.localUri,
+                    canDownload: item.status === 'sent',
+                  })
+                }
+              />
+            ) : (
+              <Text style={mine ? styles.textMine : styles.textTheirs}>
+                {item.content}
+              </Text>
+            )}
+
+            <Text
+              style={[
+                mine ? styles.metaMine : styles.metaTheirs,
+                isImage && !deleted && styles.metaImage,
+              ]}
+            >
+              {item.edited_at && !deleted ? 'modifié · ' : ''}
+              {formatMessageTime(item.created_at)}
+              {mine && item.status === 'pending' ? ' · Envoi…' : ''}
+              {mine && item.status === 'sent' ? ' · ✓' : ''}
+            </Text>
+          </Pressable>
         </View>
 
         {mine && item.status === 'failed' && (
@@ -571,67 +747,127 @@ export default function ConversationScreen() {
               </Pressable>
             </View>
           ) : (
-            <View style={[styles.inputBar, { paddingBottom: bottomPadding }]}>
-              <View style={styles.inputPill}>
-                <TextInput
-                  style={[styles.input, { height: inputHeight }]}
-                  placeholder="Écris un message..."
-                  placeholderTextColor="#8493A8"
-                  value={input}
-                  onChangeText={setInput}
-                  multiline
-                  maxLength={MESSAGE_MAX_LENGTH}
-                  scrollEnabled={inputHeight >= MAX_INPUT_HEIGHT}
-                  onContentSizeChange={(event) => {
-                    const contentHeight = event.nativeEvent.contentSize.height;
+            <View>
+              {!!editing && (
+                <View style={styles.editBanner}>
+                  <Ionicons name="create-outline" size={18} color="#FF8A32" />
+                  <View style={styles.editBannerText}>
+                    <Text style={styles.editTitle}>Modifier le message</Text>
+                    <Text style={styles.editPreview} numberOfLines={1}>
+                      {editing.content}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={cancelEdit}
+                    hitSlop={10}
+                    accessibilityLabel="Annuler la modification"
+                  >
+                    <Ionicons name="close" size={20} color="#A8B6C8" />
+                  </Pressable>
+                </View>
+              )}
 
-                    setInputHeight(
-                      Math.min(
-                        MAX_INPUT_HEIGHT,
-                        Math.max(
-                          MIN_INPUT_HEIGHT,
-                          contentHeight + INPUT_VERTICAL_PADDING
+              <View style={[styles.inputBar, { paddingBottom: bottomPadding }]}>
+                <View style={styles.inputPill}>
+                  <TextInput
+                    style={[styles.input, { height: inputHeight }]}
+                    placeholder={
+                      editing ? 'Modifier le message...' : 'Écris un message...'
+                    }
+                    placeholderTextColor="#8493A8"
+                    value={input}
+                    onChangeText={setInput}
+                    multiline
+                    maxLength={MESSAGE_MAX_LENGTH}
+                    scrollEnabled={inputHeight >= MAX_INPUT_HEIGHT}
+                    onContentSizeChange={(event) => {
+                      const contentHeight = event.nativeEvent.contentSize.height;
+
+                      setInputHeight(
+                        Math.min(
+                          MAX_INPUT_HEIGHT,
+                          Math.max(
+                            MIN_INPUT_HEIGHT,
+                            contentHeight + INPUT_VERTICAL_PADDING
+                          )
                         )
-                      )
-                    );
-                  }}
-                />
+                      );
+                    }}
+                  />
+
+                  {!editing && (
+                    <>
+                      <Pressable
+                        style={styles.pillButton}
+                        onPress={() => handlePickPhoto('library')}
+                        accessibilityLabel="Choisir une photo"
+                        hitSlop={4}
+                      >
+                        <Ionicons name="image-outline" size={22} color="#A8B6C8" />
+                      </Pressable>
+
+                      {Platform.OS !== 'web' && (
+                        <Pressable
+                          style={styles.pillButton}
+                          onPress={() => handlePickPhoto('camera')}
+                          accessibilityLabel="Prendre une photo"
+                          hitSlop={4}
+                        >
+                          <Ionicons
+                            name="camera-outline"
+                            size={22}
+                            color="#A8B6C8"
+                          />
+                        </Pressable>
+                      )}
+                    </>
+                  )}
+                </View>
 
                 <Pressable
-                  style={styles.pillButton}
-                  onPress={() => handlePickPhoto('library')}
-                  accessibilityLabel="Choisir une photo"
-                  hitSlop={4}
+                  style={[styles.sendButton, !canSend && styles.sendDisabled]}
+                  onPress={editing ? handleSaveEdit : handleSend}
+                  disabled={!canSend}
+                  accessibilityLabel={
+                    editing ? 'Enregistrer la modification' : 'Envoyer le message'
+                  }
                 >
-                  <Text style={styles.iconText}>🖼</Text>
+                  {savingEdit ? (
+                    <ActivityIndicator color="#081426" />
+                  ) : (
+                    <Ionicons
+                      name={editing ? 'checkmark' : 'send'}
+                      size={20}
+                      color="#081426"
+                    />
+                  )}
                 </Pressable>
-
-                {Platform.OS !== 'web' && (
-                  <Pressable
-                    style={styles.pillButton}
-                    onPress={() => handlePickPhoto('camera')}
-                    accessibilityLabel="Prendre une photo"
-                    hitSlop={4}
-                  >
-                    <Text style={styles.iconText}>📷</Text>
-                  </Pressable>
-                )}
               </View>
-
-              <Pressable
-                style={[styles.sendButton, !canSend && styles.sendDisabled]}
-                onPress={handleSend}
-                disabled={!canSend}
-                accessibilityLabel="Envoyer le message"
-              >
-                <Text style={styles.sendIcon}>➤</Text>
-              </Pressable>
             </View>
           )}
         </KeyboardAvoidingView>
       )}
 
       <ImageViewerModal target={viewer} onClose={() => setViewer(null)} />
+
+      <MessageActionsModal
+        target={
+          actionsTarget
+            ? {
+                id: actionsTarget.id,
+                preview:
+                  actionsTarget.type === 'image'
+                    ? '📷 Photo'
+                    : actionsTarget.content ?? '',
+                canEdit: canEditMessage(actionsTarget, myId),
+                failed: actionsTarget.status === 'failed',
+              }
+            : null
+        }
+        onEdit={startEdit}
+        onDelete={confirmDelete}
+        onClose={() => setActionsTarget(null)}
+      />
     </View>
   );
 }
@@ -695,6 +931,21 @@ const styles = StyleSheet.create({
   rowTheirs: {
     alignItems: 'flex-start',
   },
+  line: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    maxWidth: '100%',
+  },
+  lineMine: {
+    justifyContent: 'flex-end',
+  },
+  lineTheirs: {
+    justifyContent: 'flex-start',
+  },
+  menuButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
   bubble: {
     maxWidth: '80%',
     borderRadius: 16,
@@ -722,6 +973,21 @@ const styles = StyleSheet.create({
   textTheirs: {
     color: '#FFFFFF',
     fontSize: 15,
+  },
+  tombstone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tombstoneText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  tombstoneMine: {
+    color: '#5A3511',
+  },
+  tombstoneTheirs: {
+    color: '#8493A8',
   },
   metaMine: {
     color: '#5A3511',
@@ -819,6 +1085,29 @@ const styles = StyleSheet.create({
   draftSend: {
     backgroundColor: '#FF8A32',
   },
+  editBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#10223A',
+    borderTopWidth: 1,
+    borderTopColor: '#263A54',
+  },
+  editBannerText: {
+    flex: 1,
+  },
+  editTitle: {
+    color: '#FF8A32',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  editPreview: {
+    color: '#A8B6C8',
+    fontSize: 13,
+    marginTop: 2,
+  },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -854,9 +1143,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconText: {
-    fontSize: 20,
-  },
   sendButton: {
     width: MIN_INPUT_HEIGHT + 2,
     height: MIN_INPUT_HEIGHT + 2,
@@ -867,11 +1153,6 @@ const styles = StyleSheet.create({
   },
   sendDisabled: {
     opacity: 0.4,
-  },
-  sendIcon: {
-    color: '#081426',
-    fontSize: 18,
-    fontWeight: '700',
   },
   sendText: {
     color: '#081426',

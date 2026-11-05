@@ -13,9 +13,15 @@ type Props = {
   mediaPath: string | null;
   localUri?: string;
   onOpen: () => void;
+  onLongPress?: () => void;
 };
 
-export default function ImageMessage({ mediaPath, localUri, onOpen }: Props) {
+export default function ImageMessage({
+  mediaPath,
+  localUri,
+  onOpen,
+  onLongPress,
+}: Props) {
   const [url, setUrl] = useState<string | null>(localUri ?? null);
   const [failed, setFailed] = useState(false);
 
@@ -59,7 +65,7 @@ export default function ImageMessage({ mediaPath, localUri, onOpen }: Props) {
   }
 
   return (
-    <Pressable onPress={onOpen}>
+    <Pressable onPress={onOpen} onLongPress={onLongPress} delayLongPress={350}>
       <Image
         source={{ uri: url }}
         style={styles.image}
