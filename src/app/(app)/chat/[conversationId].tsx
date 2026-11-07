@@ -43,13 +43,22 @@ import {
 } from '@/services/media.service';
 import type { PreparedImage } from '@/services/media.service';
 import { isUserBlocked, unblockUser } from '@/services/block.service';
+import type { PeerReceipts } from '@/services/receipt.service';
 import ImageMessage from '@/features/messages/components/ImageMessage';
 import ImageViewerModal from '@/features/messages/components/ImageViewerModal';
 import type { ViewerTarget } from '@/features/messages/components/ImageViewerModal';
 import MessageActionsModal from '@/features/messages/components/MessageActionsModal';
+import { useConversationLive } from '@/features/messages/hooks/useConversationLive';
+import PresenceLabel from '@/features/presence/components/PresenceLabel';
+import { useContactPresence } from '@/features/presence/hooks/useContactPresence';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
+import { useActiveConversation } from '@/hooks/useActiveConversation';
+import { useUserSettings } from '@/hooks/useUserSettings';
 import { generateId } from '@/utils/id';
 import { formatMessageTime } from '@/utils/format';
+
+
+
 
 /**
  * Décalage du clavier : UN SEUL mécanisme, KeyboardAvoidingView.
@@ -122,6 +131,23 @@ function canActOnMessage(message: ChatMessage, myId: string | null): boolean {
   return message.status === 'sent' || message.status === 'failed';
 }
 
+/** Statut d'un de mes messages envoyés, d'après les repères du correspondant. */
+function deliveryOf(
+  message: ChatMessage,
+  receipts: PeerReceipts | null
+): 'sent' | 'delivered' | 'read' {
+  if (!receipts) return 'sent';
+
+  const created = Date.parse(message.created_at);
+
+  if (receipts.readAt !== null && receipts.readAt >= created) return 'read';
+  if (receipts.deliveredAt !== null && receipts.deliveredAt >= created) {
+    return 'delivered';
+  }
+
+  return 'sent';
+}
+
 function editErrorMessage(error: unknown): string {
   const text = error instanceof Error ? error.message : '';
 
@@ -145,7 +171,7 @@ export default function ConversationScreen() {
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
   const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
-
+  useActiveConversation(conversationId);
   const [conversation, setConversation] = useState<ConversationSummary | null>(
     null
   );
@@ -166,6 +192,13 @@ export default function ConversationScreen() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
+  // Réglages, présence du correspondant, saisie et reçus
+  const { settings } = useUserSettings();
+  const typingEnabled = settings?.typing_indicator_enabled ?? true;
+  const { peerTyping, receipts, notifyTyping, stopTyping, announceRead } =
+    useConversationLive({ conversationId, typingEnabled });
+  const presence = useContactPresence(conversation?.other_user?.id);
+
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
 
@@ -178,8 +211,10 @@ export default function ConversationScreen() {
   const markRead = useCallback(() => {
     if (!conversationId) return;
     // Non critique : en cas d'échec, le compteur sera corrigé à la prochaine ouverture.
-    markConversationRead(conversationId).catch(() => undefined);
-  }, [conversationId]);
+    markConversationRead(conversationId)
+      .then(() => announceRead())
+      .catch(() => undefined);
+  }, [conversationId, announceRead]);
 
   /** Récupère les derniers messages et les fusionne (utilisé à la reconnexion). */
   const syncLatest = useCallback(async () => {
@@ -373,6 +408,19 @@ export default function ConversationScreen() {
     }
   }
 
+  /** Saisie : met à jour le champ et prévient le correspondant que j'écris. */
+  function handleChangeText(value: string) {
+    setInput(value);
+
+    if (editing) return;
+
+    if (value.trim().length > 0) {
+      notifyTyping();
+    } else {
+      stopTyping();
+    }
+  }
+
   function handleSend() {
     const content = input.trim();
 
@@ -392,6 +440,7 @@ export default function ConversationScreen() {
       status: 'pending',
     };
 
+    stopTyping();
     setNotice('');
     setMessages((previous) => upsertMessages(previous, [optimistic]));
     setInput('');
@@ -435,6 +484,7 @@ export default function ConversationScreen() {
 
     pendingImages.current.set(id, draftImage);
 
+    stopTyping();
     setNotice('');
     setMessages((previous) => upsertMessages(previous, [optimistic]));
     setDraftImage(null);
@@ -458,6 +508,7 @@ export default function ConversationScreen() {
 
     if (!target || !canEditMessage(target, myId)) return;
 
+    stopTyping();
     setNotice('');
     setDraftImage(null);
     setEditing(target);
@@ -564,6 +615,10 @@ export default function ConversationScreen() {
     const deleted = !!item.deleted_at;
     const actionable = canActOnMessage(item, myId);
     const openActions = actionable ? () => setActionsTarget(item) : undefined;
+    const delivery =
+      mine && item.status === 'sent' && !deleted
+        ? deliveryOf(item, receipts)
+        : null;
 
     return (
       <View style={[styles.row, mine ? styles.rowMine : styles.rowTheirs]}>
@@ -624,17 +679,21 @@ export default function ConversationScreen() {
               </Text>
             )}
 
-            <Text
-              style={[
-                mine ? styles.metaMine : styles.metaTheirs,
-                isImage && !deleted && styles.metaImage,
-              ]}
-            >
-              {item.edited_at && !deleted ? 'modifié · ' : ''}
-              {formatMessageTime(item.created_at)}
-              {mine && item.status === 'pending' ? ' · Envoi…' : ''}
-              {mine && item.status === 'sent' ? ' · ✓' : ''}
-            </Text>
+            <View style={[styles.metaRow, isImage && !deleted && styles.metaImage]}>
+              <Text style={mine ? styles.metaMineText : styles.metaTheirsText}>
+                {item.edited_at && !deleted ? 'modifié · ' : ''}
+                {formatMessageTime(item.created_at)}
+                {mine && item.status === 'pending' ? ' · Envoi…' : ''}
+              </Text>
+
+              {delivery && (
+                <Ionicons
+                  name={delivery === 'sent' ? 'checkmark' : 'checkmark-done'}
+                  size={14}
+                  color={delivery === 'read' ? '#FFFFFF' : '#5A3511'}
+                />
+              )}
+            </View>
           </Pressable>
         </View>
 
@@ -661,11 +720,15 @@ export default function ConversationScreen() {
             <Text style={styles.headerName} numberOfLines={1}>
               {name}
             </Text>
-            {!!conversation.other_user?.username && (
-              <Text style={styles.headerUsername}>
-                @{conversation.other_user.username}
-              </Text>
-            )}
+            <PresenceLabel
+              typing={peerTyping}
+              presence={presence}
+              fallback={
+                conversation.other_user?.username
+                  ? `@${conversation.other_user.username}`
+                  : undefined
+              }
+            />
           </View>
         )}
       </View>
@@ -697,6 +760,7 @@ export default function ConversationScreen() {
             <FlatList
               style={styles.flex}
               data={messages}
+              extraData={receipts}
               inverted
               keyExtractor={(item) => item.id}
               renderItem={renderMessage}
@@ -776,7 +840,7 @@ export default function ConversationScreen() {
                     }
                     placeholderTextColor="#8493A8"
                     value={input}
-                    onChangeText={setInput}
+                    onChangeText={handleChangeText}
                     multiline
                     maxLength={MESSAGE_MAX_LENGTH}
                     scrollEnabled={inputHeight >= MAX_INPUT_HEIGHT}
@@ -900,10 +964,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
   },
-  headerUsername: {
-    color: '#A8B6C8',
-    marginTop: 3,
-  },
   banner: {
     backgroundColor: '#10223A',
     color: '#FF8A32',
@@ -989,17 +1049,20 @@ const styles = StyleSheet.create({
   tombstoneTheirs: {
     color: '#8493A8',
   },
-  metaMine: {
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 4,
+    marginTop: 4,
+  },
+  metaMineText: {
     color: '#5A3511',
     fontSize: 11,
-    marginTop: 4,
-    alignSelf: 'flex-end',
   },
-  metaTheirs: {
+  metaTheirsText: {
     color: '#8493A8',
     fontSize: 11,
-    marginTop: 4,
-    alignSelf: 'flex-end',
   },
   metaImage: {
     paddingHorizontal: 6,

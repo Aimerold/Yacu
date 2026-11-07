@@ -44,3 +44,7 @@ yarn-error.*
 
 # supabase
 supabase/.temp/
+
+firebase-adminsdk-*.json
+
+yacu-96cd4-firebase-adminsdk-fbsvc-60aa9738b1.json

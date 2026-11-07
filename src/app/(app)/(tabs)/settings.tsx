@@ -4,6 +4,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -12,6 +13,7 @@ import { useRouter } from 'expo-router';
 import AppHeader from '@/components/layout/AppHeader';
 import Avatar from '@/components/ui/Avatar';
 import { useMyProfile } from '@/hooks/useMyProfile';
+import { useUserSettings } from '@/hooks/useUserSettings';
 import {
   AccountError,
   deleteMyAccount,
@@ -38,9 +40,41 @@ function SettingsRow({ label, hint, onPress }: RowProps) {
   );
 }
 
+type ToggleRowProps = {
+  label: string;
+  hint?: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+};
+
+function ToggleRow({ label, hint, value, onValueChange }: ToggleRowProps) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowText}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {!!hint && <Text style={styles.rowHint}>{hint}</Text>}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: colors.border, true: colors.accent }}
+        thumbColor={colors.text}
+        ios_backgroundColor={colors.border}
+      />
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const router = useRouter();
   const profile = useMyProfile();
+  const {
+    settings,
+    loading: settingsLoading,
+    error: settingsError,
+    update: updateSettings,
+    reload: reloadSettings,
+  } = useUserSettings();
 
   const [email, setEmail] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -161,11 +195,76 @@ export default function SettingsScreen() {
 
         <Text style={styles.section}>Confidentialité</Text>
         <View style={styles.group}>
+          {settings ? (
+            <>
+              <ToggleRow
+                label="Dernière activité"
+                hint="Si tu la masques, tu ne verras pas non plus celle des autres."
+                value={settings.show_last_seen}
+                onValueChange={(value) => updateSettings({ show_last_seen: value })}
+              />
+              <ToggleRow
+                label="Présence en ligne"
+                hint="Montre quand tu es en ligne."
+                value={settings.show_online_status}
+                onValueChange={(value) =>
+                  updateSettings({ show_online_status: value })
+                }
+              />
+              <ToggleRow
+                label="Indicateur de saisie"
+                hint="Montre « en train d'écrire… » pendant que tu écris."
+                value={settings.typing_indicator_enabled}
+                onValueChange={(value) =>
+                  updateSettings({ typing_indicator_enabled: value })
+                }
+              />
+              <ToggleRow
+                label="Confirmations de lecture"
+                hint="Si tu les désactives, les autres ne voient pas quand tu as lu leurs messages."
+                value={settings.read_receipts_enabled}
+                onValueChange={(value) =>
+                  updateSettings({ read_receipts_enabled: value })
+                }
+              />
+            </>
+          ) : settingsLoading ? (
+            <View style={styles.row}>
+              <ActivityIndicator color={colors.accent} />
+            </View>
+          ) : (
+            <Pressable style={styles.row} onPress={reloadSettings}>
+              <Text style={styles.rowLabel}>Réessayer de charger les réglages</Text>
+            </Pressable>
+          )}
+
           <SettingsRow
             label="Utilisateurs bloqués"
             hint="Gère les personnes que tu as bloquées"
             onPress={() => router.push('/(app)/blocked-users')}
           />
+        </View>
+
+        {!!settingsError && <Text style={styles.error}>{settingsError}</Text>}
+
+        <Text style={styles.section}>Notifications</Text>
+        <View style={styles.group}>
+          {settings ? (
+            <ToggleRow
+              label="Notifications push"
+              hint="Ton choix est enregistré et s'appliquera dès l'arrivée des notifications."
+              value={settings.push_notifications_enabled}
+              onValueChange={(value) =>
+                updateSettings({ push_notifications_enabled: value })
+              }
+            />
+          ) : (
+            <View style={styles.row}>
+              <Text style={styles.rowHint}>
+                {settingsLoading ? 'Chargement…' : 'Indisponible'}
+              </Text>
+            </View>
+          )}
         </View>
 
         <Text style={styles.section}>Session</Text>
@@ -318,6 +417,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+    gap: 12,
   },
   rowText: {
     flex: 1,
@@ -330,6 +430,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 13,
     marginTop: 3,
+    lineHeight: 18,
   },
   chevron: {
     color: colors.textMuted,

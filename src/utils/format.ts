@@ -27,3 +27,28 @@ export function formatListTime(iso: string): string {
 
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`;
 }
+
+/** Dernière activité : « vu à l'instant », « vu il y a 5 min », « vu hier à 18:30 »… */
+export function formatLastSeen(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60000);
+
+  if (minutes < 1) return "vu à l'instant";
+  if (minutes < 60) return `vu il y a ${minutes} min`;
+
+  const time = formatMessageTime(iso);
+
+  if (date.toDateString() === now.toDateString()) {
+    return `vu aujourd'hui à ${time}`;
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) {
+    return `vu hier à ${time}`;
+  }
+
+  return `vu le ${pad(date.getDate())}/${pad(date.getMonth() + 1)} à ${time}`;
+}

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { unregisterStoredPushToken } from '@/lib/notifications';
 
 export const PASSWORD_MIN_LENGTH = 8;
 
@@ -169,7 +170,17 @@ export async function changePassword(params: {
   if (error) throw passwordUpdateError(error.message);
 }
 
+/**
+ * Déconnecte l'utilisateur.
+ * Retire d'abord le jeton de notification de cet appareil (la session est encore
+ * valide), sans jamais retarder la déconnexion de plus de 3 secondes.
+ */
 export async function signOut(): Promise<void> {
+  await Promise.race([
+    unregisterStoredPushToken(),
+    new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+  ]);
+
   const { error } = await supabase.auth.signOut();
 
   if (error) throw new Error(error.message);

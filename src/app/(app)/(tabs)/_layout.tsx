@@ -1,8 +1,12 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAppPresence } from '@/features/presence/hooks/useAppPresence';
 import { colors } from '@/theme/tokens';
 
 export default function TabsLayout() {
+  // Battement de cœur de présence + marquage « reçu », pour toute la zone connectée
+  useAppPresence();
+
   return (
     <Tabs
       screenOptions={{

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "138533812627",
+    "project_id": "yacu-96cd4",
+    "storage_bucket": "yacu-96cd4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:138533812627:android:1ebf05eddf93be07025066",
+        "android_client_info": {
+          "package_name": "yacu.com.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkoLBc3FP8lj8w-yvBReGMjO8HhHB-_qc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
