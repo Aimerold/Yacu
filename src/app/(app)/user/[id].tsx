@@ -19,13 +19,23 @@ import {
 } from '@/services/block.service';
 import { reportUser } from '@/services/report.service';
 import type { ReportReason } from '@/services/report.service';
+import { getMemberSince } from '@/services/profile-meta.service';
+import Avatar from '@/components/ui/Avatar';
 import ReportModal from '@/components/ui/ReportModal';
+import { formatMemberSince } from '@/utils/format';
+import FriendActionButton from '@/features/contacts/components/FriendActionButton';
+import { useFriendships } from '@/features/contacts/hooks/useFriendships';
 
 export default function UserProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const friendships = useFriendships({
+    userIds: id ? [id] : [],
+    loadLists: false,
+  });
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [memberSince, setMemberSince] = useState<string | null>(null);
   const [myId, setMyId] = useState<string | null>(null);
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -44,10 +54,11 @@ export default function UserProfileScreen() {
       try {
         if (!id) throw new Error('Identifiant du profil manquant.');
 
-        const [result, sessionResult, blocked] = await Promise.all([
+        const [result, sessionResult, blocked, since] = await Promise.all([
           getProfileById(id),
           supabase.auth.getSession(),
           isUserBlocked(id).catch(() => false),
+          getMemberSince(id).catch(() => null),
         ]);
 
         if (!active) return;
@@ -55,6 +66,7 @@ export default function UserProfileScreen() {
         setProfile(result);
         setMyId(sessionResult.data.session?.user.id ?? null);
         setBlockedByMe(blocked);
+        setMemberSince(since);
       } catch (e) {
         console.error('Erreur de chargement du profil :', e);
         if (active) setError('Impossible de charger ce profil.');
@@ -102,8 +114,13 @@ export default function UserProfileScreen() {
       setBlockedByMe(true);
       setConfirmBlock(false);
       setInfo('Utilisateur bloqué.');
-    } catch {
-      setActionError('Impossible de bloquer cet utilisateur. Réessaie.');
+    } catch (e) {
+      console.error('Blocage :', e);
+      setActionError(
+        `Impossible de bloquer cet utilisateur. ${
+          e instanceof Error ? e.message : ''
+        }`
+      );
     } finally {
       setBusy(false);
     }
@@ -146,12 +163,12 @@ export default function UserProfileScreen() {
       ) : profile ? (
         <View>
           <View style={styles.card}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {(profile.display_name || profile.username)
-                  .charAt(0)
-                  .toUpperCase()}
-              </Text>
+            <View style={styles.avatarWrap}>
+              <Avatar
+                name={profile.display_name || profile.username}
+                uri={profile.avatar_url}
+                size={85}
+              />
             </View>
 
             <Text style={styles.name}>
@@ -161,6 +178,30 @@ export default function UserProfileScreen() {
             <Text style={styles.bio}>
               {profile.bio || 'Aucune biographie pour le moment.'}
             </Text>
+
+            {!!memberSince && (
+              <Text style={styles.memberSince}>
+                {formatMemberSince(memberSince)}
+              </Text>
+            )}
+
+            {!isMe && !blockedByMe && id && (
+              <View style={styles.friendAction}>
+                <FriendActionButton
+                  relation={
+                    friendships.relations.get(id) ?? {
+                      state: 'none',
+                      requestId: null,
+                    }
+                  }
+                  disabled={friendships.loading}
+                  onSend={() => friendships.send(id)}
+                  onCancel={friendships.cancel}
+                  onRespond={friendships.respond}
+                  onRemove={() => friendships.remove(id)}
+                />
+              </View>
+            )}
 
             {!isMe && !blockedByMe && (
               <Pressable
@@ -287,19 +328,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 25,
   },
-  avatar: {
-    width: 85,
-    height: 85,
-    borderRadius: 43,
-    backgroundColor: '#263A54',
-    alignItems: 'center',
-    justifyContent: 'center',
+  avatarWrap: {
     marginBottom: 18,
-  },
-  avatarText: {
-    color: '#FF8A32',
-    fontSize: 34,
-    fontWeight: '700',
   },
   name: {
     color: '#FFFFFF',
@@ -313,6 +343,16 @@ const styles = StyleSheet.create({
   bio: {
     color: '#C1CCDA',
     textAlign: 'center',
+    marginTop: 20,
+  },
+  memberSince: {
+    color: '#8493A8',
+    fontSize: 13,
+    marginTop: 14,
+  },
+  friendAction: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
     marginTop: 20,
   },
   button: {

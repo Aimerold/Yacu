@@ -54,3 +54,12 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## État du projet
+
+### Amitiés
+
+Le parcours d’envoi, réception, acceptation, refus et annulation des demandes
+d’amitié, ainsi que le retrait d’un ami, est implémenté côté application.
+L’application de la migration `supabase/migrations/20261108113800_create_friendships.sql`
+et les tests de sécurité SQL sur la base de déploiement restent à effectuer.: Chat with Expo users and ask questions.

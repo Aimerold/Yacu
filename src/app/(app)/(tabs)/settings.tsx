@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import AppHeader from '@/components/layout/AppHeader';
 import Avatar from '@/components/ui/Avatar';
-import { useMyProfile } from '@/hooks/useMyProfile';
+import { invalidateMyProfile, useMyProfile } from '@/hooks/useMyProfile';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import {
   AccountError,
@@ -20,6 +21,10 @@ import {
   getCurrentEmail,
   signOut,
 } from '@/services/auth.service';
+import { pickAvatar, removeAvatar, setAvatar } from '@/services/avatar.service';
+import { MediaError } from '@/services/media.service';
+import { getMemberSince } from '@/services/profile-meta.service';
+import { formatMemberSince } from '@/utils/format';
 import { colors } from '@/theme/tokens';
 
 type RowProps = {
@@ -77,12 +82,18 @@ export default function SettingsScreen() {
   } = useUserSettings();
 
   const [email, setEmail] = useState<string | null>(null);
+  const [memberSince, setMemberSince] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarInfo, setAvatarInfo] = useState('');
+  const [avatarError, setAvatarError] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const [deleteError, setDeleteError] = useState('');
+
+  const profileId = profile?.id;
 
   useEffect(() => {
     let active = true;
@@ -95,6 +106,70 @@ export default function SettingsScreen() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    if (profileId) {
+      getMemberSince(profileId)
+        .then((value) => {
+          if (active) setMemberSince(value);
+        })
+        .catch(() => undefined);
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
+
+  async function handleChangeAvatar(source: 'library' | 'camera') {
+    if (avatarBusy) return;
+
+    setAvatarError('');
+    setAvatarInfo('');
+
+    try {
+      const prepared = await pickAvatar(source);
+
+      if (!prepared) return;
+
+      setAvatarBusy(true);
+      await setAvatar(prepared);
+      invalidateMyProfile();
+      setAvatarInfo('Photo de profil mise à jour.');
+    } catch (e) {
+      setAvatarError(
+        e instanceof MediaError
+          ? e.message
+          : 'Impossible de mettre à jour la photo. Réessaie.'
+      );
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    if (avatarBusy) return;
+
+    setAvatarError('');
+    setAvatarInfo('');
+    setAvatarBusy(true);
+
+    try {
+      await removeAvatar();
+      invalidateMyProfile();
+      setAvatarInfo('Photo de profil supprimée.');
+    } catch (e) {
+      setAvatarError(
+        e instanceof MediaError
+          ? e.message
+          : 'Impossible de supprimer la photo. Réessaie.'
+      );
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -156,7 +231,14 @@ export default function SettingsScreen() {
         <Text style={styles.title}>Paramètres</Text>
 
         <View style={styles.profileCard}>
-          <Avatar name={name} uri={profile?.avatar_url} size={72} />
+          <View style={styles.avatarWrap}>
+            <Avatar name={name} uri={profile?.avatar_url} size={72} />
+            {avatarBusy && (
+              <View style={styles.avatarOverlay}>
+                <ActivityIndicator color={colors.accent} />
+              </View>
+            )}
+          </View>
 
           {profile ? (
             <>
@@ -164,6 +246,11 @@ export default function SettingsScreen() {
               <Text style={styles.profileUsername}>@{profile.username}</Text>
               {!!profile.bio && (
                 <Text style={styles.profileBio}>{profile.bio}</Text>
+              )}
+              {!!memberSince && (
+                <Text style={styles.memberSince}>
+                  {formatMemberSince(memberSince)}
+                </Text>
               )}
             </>
           ) : (
@@ -177,6 +264,34 @@ export default function SettingsScreen() {
             <Text style={styles.editButtonText}>Modifier mon profil</Text>
           </Pressable>
         </View>
+
+        <Text style={styles.section}>Photo de profil</Text>
+        <View style={styles.group}>
+          <SettingsRow
+            label="Choisir dans la galerie"
+            onPress={() => handleChangeAvatar('library')}
+          />
+
+          {Platform.OS !== 'web' && (
+            <SettingsRow
+              label="Prendre une photo"
+              onPress={() => handleChangeAvatar('camera')}
+            />
+          )}
+
+          {!!profile?.avatar_url && (
+            <Pressable
+              style={styles.row}
+              onPress={handleRemoveAvatar}
+              disabled={avatarBusy}
+            >
+              <Text style={styles.dangerLabel}>Supprimer la photo</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {!!avatarInfo && <Text style={styles.info}>{avatarInfo}</Text>}
+        {!!avatarError && <Text style={styles.error}>{avatarError}</Text>}
 
         <Text style={styles.section}>Compte</Text>
         <View style={styles.group}>
@@ -365,6 +480,17 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 22,
   },
+  avatarWrap: {
+    width: 72,
+    height: 72,
+  },
+ avatarOverlay: {
+  ...StyleSheet.absoluteFill,
+  borderRadius: 36,
+  backgroundColor: 'rgba(8,20,38,0.6)',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
   profileLoader: {
     marginTop: 18,
   },
@@ -383,6 +509,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
     lineHeight: 20,
+  },
+  memberSince: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginTop: 12,
   },
   editButton: {
     backgroundColor: colors.accent,
@@ -436,6 +567,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 22,
     marginLeft: 8,
+  },
+  info: {
+    color: colors.textSecondary,
+    marginTop: 12,
+    lineHeight: 20,
   },
   error: {
     color: colors.accent,

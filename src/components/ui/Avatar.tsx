@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/tokens';
 
@@ -12,6 +12,10 @@ type Props = {
 export default function Avatar({ name, uri, size = 44 }: Props) {
   const [failed, setFailed] = useState(false);
   const radius = size / 2;
+
+  useEffect(() => {
+    setFailed(false);
+  }, [uri]);
 
   if (uri && !failed) {
     return (

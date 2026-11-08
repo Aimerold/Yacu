@@ -2,6 +2,21 @@ function pad(value: number): string {
   return value < 10 ? `0${value}` : String(value);
 }
 
+const MONTHS = [
+  'janvier',
+  'février',
+  'mars',
+  'avril',
+  'mai',
+  'juin',
+  'juillet',
+  'août',
+  'septembre',
+  'octobre',
+  'novembre',
+  'décembre',
+];
+
 /** Heure d'un message : 14:05 */
 export function formatMessageTime(iso: string): string {
   const date = new Date(iso);
@@ -51,4 +66,11 @@ export function formatLastSeen(iso: string, now: Date = new Date()): string {
   }
 
   return `vu le ${pad(date.getDate())}/${pad(date.getMonth() + 1)} à ${time}`;
+}
+
+/** Date d'inscription : « Membre depuis novembre 2026 » */
+export function formatMemberSince(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return `Membre depuis ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 }

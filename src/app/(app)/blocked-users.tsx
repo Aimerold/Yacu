@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import Avatar from '@/components/ui/Avatar';
 import { getBlockedUsers, unblockUser } from '@/services/block.service';
 import type { BlockedUser } from '@/services/block.service';
 
@@ -91,11 +92,7 @@ export default function BlockedUsersScreen() {
 
             return (
               <View style={styles.row}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
+                <Avatar name={name} uri={item.avatar_url} size={44} />
 
                 <View style={styles.info}>
                   <Text style={styles.name} numberOfLines={1}>
@@ -170,19 +167,6 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
     gap: 12,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#263A54',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    color: '#FF8A32',
-    fontSize: 18,
-    fontWeight: '700',
   },
   info: {
     flex: 1,

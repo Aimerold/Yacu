@@ -1,11 +1,13 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppPresence } from '@/features/presence/hooks/useAppPresence';
+import { useFriendships } from '@/features/contacts/hooks/useFriendships';
 import { colors } from '@/theme/tokens';
 
 export default function TabsLayout() {
   // Battement de cœur de présence + marquage « reçu », pour toute la zone connectée
   useAppPresence();
+  const { incomingCount } = useFriendships({ loadLists: false });
 
   return (
     <Tabs
@@ -40,6 +42,11 @@ export default function TabsLayout() {
         options={{
           title: 'Contacts',
           tabBarLabel: 'Contacts',
+          tabBarBadge: incomingCount > 0 ? incomingCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: colors.accent,
+            color: colors.onAccent,
+          },
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'people' : 'people-outline'}
