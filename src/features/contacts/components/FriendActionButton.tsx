@@ -29,11 +29,15 @@ export default function FriendActionButton({
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [error, setError] = useState('');
+
   const isDisabled = disabled || busy;
 
   async function run(action: () => Promise<void>) {
+    if (isDisabled) return;
+
     setBusy(true);
     setError('');
+
     try {
       await action();
       setConfirmRemove(false);
@@ -41,19 +45,23 @@ export default function FriendActionButton({
       setError(
         caught instanceof Error
           ? caught.message
-          : 'Une erreur réseau est survenue. Réessaie.'
+          : 'Impossible d’effectuer cette action. Réessaie.'
       );
     } finally {
       setBusy(false);
     }
   }
 
-  function withRequestId(action: (requestId: string) => Promise<void>) {
+  function withRequestId(
+    action: (requestId: string) => Promise<void>
+  ) {
     const requestId = relation.requestId;
+
     if (!requestId) {
       setError('Cette demande n’existe plus.');
       return;
     }
+
     void run(() => action(requestId));
   }
 
@@ -62,24 +70,43 @@ export default function FriendActionButton({
       <View style={styles.wrapper}>
         <View style={styles.actions}>
           <Pressable
-            style={[styles.button, styles.primary, isDisabled && styles.disabled]}
+            style={[
+              styles.button,
+              styles.rowButton,
+              styles.primary,
+              isDisabled && styles.disabled,
+            ]}
             onPress={() => withRequestId((id) => onRespond(id, true))}
             disabled={isDisabled}
+            accessibilityRole="button"
+            accessibilityLabel="Accepter la demande d’amitié"
           >
             {busy ? (
-              <ActivityIndicator size="small" color={colors.onAccent} />
+              <ActivityIndicator
+                size="small"
+                color={colors.onAccent}
+              />
             ) : (
               <Text style={styles.primaryText}>Accepter</Text>
             )}
           </Pressable>
+
           <Pressable
-            style={[styles.button, styles.secondary, isDisabled && styles.disabled]}
+            style={[
+              styles.button,
+              styles.rowButton,
+              styles.secondary,
+              isDisabled && styles.disabled,
+            ]}
             onPress={() => withRequestId((id) => onRespond(id, false))}
             disabled={isDisabled}
+            accessibilityRole="button"
+            accessibilityLabel="Refuser la demande d’amitié"
           >
             <Text style={styles.secondaryText}>Refuser</Text>
           </Pressable>
         </View>
+
         {!!error && <Text style={styles.error}>{error}</Text>}
       </View>
     );
@@ -89,26 +116,44 @@ export default function FriendActionButton({
     return (
       <View style={styles.confirmBox}>
         <Text style={styles.confirmText}>Retirer cet ami ?</Text>
+
         <View style={styles.actions}>
           <Pressable
-            style={[styles.button, styles.secondary, isDisabled && styles.disabled]}
+            style={[
+              styles.button,
+              styles.rowButton,
+              styles.secondary,
+              isDisabled && styles.disabled,
+            ]}
             onPress={() => setConfirmRemove(false)}
             disabled={isDisabled}
+            accessibilityRole="button"
           >
             <Text style={styles.secondaryText}>Annuler</Text>
           </Pressable>
+
           <Pressable
-            style={[styles.button, styles.primary, isDisabled && styles.disabled]}
+            style={[
+              styles.button,
+              styles.rowButton,
+              styles.primary,
+              isDisabled && styles.disabled,
+            ]}
             onPress={() => void run(onRemove)}
             disabled={isDisabled}
+            accessibilityRole="button"
           >
             {busy ? (
-              <ActivityIndicator size="small" color={colors.onAccent} />
+              <ActivityIndicator
+                size="small"
+                color={colors.onAccent}
+              />
             ) : (
               <Text style={styles.primaryText}>Retirer</Text>
             )}
           </Pressable>
         </View>
+
         {!!error && <Text style={styles.error}>{error}</Text>}
       </View>
     );
@@ -126,7 +171,9 @@ export default function FriendActionButton({
       <Pressable
         style={[
           styles.button,
-          relation.state === 'none' ? styles.primary : styles.secondary,
+          relation.state === 'none'
+            ? styles.primary
+            : styles.secondary,
           isDisabled && styles.disabled,
         ]}
         onPress={() => {
@@ -140,11 +187,23 @@ export default function FriendActionButton({
           }
         }}
         disabled={isDisabled}
+        accessibilityRole="button"
+        accessibilityLabel={
+          relation.state === 'none'
+            ? 'Envoyer une demande d’amitié'
+            : relation.state === 'request_sent'
+              ? 'Annuler la demande d’amitié'
+              : 'Gérer cette amitié'
+        }
       >
         {busy ? (
           <ActivityIndicator
             size="small"
-            color={relation.state === 'none' ? colors.onAccent : colors.text}
+            color={
+              relation.state === 'none'
+                ? colors.onAccent
+                : colors.text
+            }
           />
         ) : (
           <Text
@@ -159,6 +218,7 @@ export default function FriendActionButton({
           </Text>
         )}
       </Pressable>
+
       {!!error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
@@ -168,20 +228,24 @@ const styles = StyleSheet.create({
   wrapper: {
     alignItems: 'stretch',
     maxWidth: 180,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   actions: {
     flexDirection: 'row',
     gap: 6,
   },
   button: {
-    minHeight: 38,
+    minHeight: 40,
     minWidth: 72,
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  rowButton: {
+    flex: 1,
   },
   primary: {
     backgroundColor: colors.accent,
@@ -196,6 +260,7 @@ const styles = StyleSheet.create({
     color: colors.onAccent,
     fontSize: 12,
     fontWeight: '700',
+    textAlign: 'center',
   },
   secondaryText: {
     color: colors.text,
@@ -204,6 +269,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   confirmBox: {
+    maxWidth: 200,
     gap: 8,
     padding: 10,
     borderRadius: 10,
