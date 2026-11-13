@@ -11,10 +11,12 @@ import {
   View,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { getMyProfile, updateMyProfile } from '@/services/profile.service';
+import {
+  getMyProfile,
+  updateMyProfile,
+} from '@/services/profile.service';
 import type { Profile } from '@/services/profile.service';
 
-const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,20}$/;
 const DISPLAY_NAME_MAX = 50;
 const BIO_MAX = 160;
 
@@ -43,9 +45,13 @@ export default function ProfileEditScreen() {
         setUsername(result.username);
         setBio(result.bio ?? '');
       } catch {
-        if (active) setError('Impossible de charger ton profil.');
+        if (active) {
+          setError('Impossible de charger ton profil.');
+        }
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     }
 
@@ -59,30 +65,86 @@ export default function ProfileEditScreen() {
   async function handleSave() {
     if (!profile || saving) return;
 
-    const changes: { display_name?: string; username?: string; bio?: string } = {};
+    setError('');
+
+    const changes: {
+      display_name?: string;
+      username?: string;
+      bio?: string;
+    } = {};
+
     const nextName = displayName.trim();
-    const nextUsername = username.trim();
+    const nextUsername = username.trim().toLowerCase();
     const nextBio = bio.trim();
 
     if (nextName !== (profile.display_name ?? '')) {
-      if (nextName.length < 1) {
+      if (!nextName) {
         setError("Le nom d'affichage ne peut pas être vide.");
         return;
       }
+
+      if (nextName.length > DISPLAY_NAME_MAX) {
+        setError(
+          `Le nom d'affichage ne peut pas dépasser ${DISPLAY_NAME_MAX} caractères.`
+        );
+        return;
+      }
+
       changes.display_name = nextName;
     }
 
     if (nextUsername !== profile.username) {
-      if (!USERNAME_PATTERN.test(nextUsername)) {
+      if (!nextUsername) {
+        setError("Saisis un nom d'utilisateur.");
+        return;
+      }
+
+      if (nextUsername.length < 3) {
         setError(
-          "Nom d'utilisateur : 3 à 20 caractères, lettres, chiffres et _ uniquement."
+          "Le nom d'utilisateur doit contenir au moins 3 caractères."
         );
         return;
       }
+
+      if (nextUsername.length > 20) {
+        setError(
+          "Le nom d'utilisateur ne peut pas dépasser 20 caractères."
+        );
+        return;
+      }
+
+      if (/\s/.test(nextUsername)) {
+        setError(
+          "Le nom d'utilisateur ne doit pas contenir d'espace. Utilise _ pour séparer les mots."
+        );
+        return;
+      }
+
+      if (nextUsername.includes('@')) {
+        setError(
+          "Saisis ton nom d'utilisateur sans le symbole @."
+        );
+        return;
+      }
+
+      if (!/^[a-z0-9_]+$/.test(nextUsername)) {
+        setError(
+          "Le nom d'utilisateur accepte uniquement les lettres de a à z, les chiffres et _. Les accents, points et tirets ne sont pas autorisés."
+        );
+        return;
+      }
+
       changes.username = nextUsername;
     }
 
     if (nextBio !== (profile.bio ?? '')) {
+      if (nextBio.length > BIO_MAX) {
+        setError(
+          `La biographie ne peut pas dépasser ${BIO_MAX} caractères.`
+        );
+        return;
+      }
+
       changes.bio = nextBio;
     }
 
@@ -92,13 +154,13 @@ export default function ProfileEditScreen() {
     }
 
     setSaving(true);
-    setError('');
 
     try {
       await updateMyProfile(changes);
       router.back();
     } catch (e) {
-      const message = e instanceof Error ? e.message.toLowerCase() : '';
+      const message =
+        e instanceof Error ? e.message.toLowerCase() : '';
 
       if (
         message.includes('duplicate') ||
@@ -107,7 +169,9 @@ export default function ProfileEditScreen() {
       ) {
         setError("Ce nom d'utilisateur est déjà pris.");
       } else {
-        setError('Impossible de enregistrer les modifications. Réessaie.');
+        setError(
+          "Impossible d'enregistrer les modifications. Réessaie."
+        );
       }
     } finally {
       setSaving(false);
@@ -126,19 +190,27 @@ export default function ProfileEditScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+        >
           <Text style={styles.back}>← Annuler</Text>
         </Pressable>
 
         <Text style={styles.title}>Modifier mon profil</Text>
 
         {loading ? (
-          <ActivityIndicator color="#FF8A32" size="large" style={styles.loader} />
+          <ActivityIndicator
+            color="#FF8A32"
+            size="large"
+            style={styles.loader}
+          />
         ) : !profile ? (
           <Text style={styles.error}>{error}</Text>
         ) : (
           <View>
             <Text style={styles.label}>Nom d'affichage</Text>
+
             <TextInput
               style={styles.input}
               value={displayName}
@@ -149,18 +221,24 @@ export default function ProfileEditScreen() {
             />
 
             <Text style={styles.label}>Nom d'utilisateur</Text>
+
             <TextInput
               style={styles.input}
               value={username}
               onChangeText={setUsername}
-              maxLength={20}
               autoCapitalize="none"
               autoCorrect={false}
               placeholder="nom_utilisateur"
               placeholderTextColor="#8493A8"
             />
 
+            <Text style={styles.usernameHint}>
+              De 3 à 20 caractères : lettres sans accent,
+              chiffres et _. Sans espace ni @.
+            </Text>
+
             <Text style={styles.label}>Biographie</Text>
+
             <TextInput
               style={[styles.input, styles.bioInput]}
               value={bio}
@@ -170,14 +248,20 @@ export default function ProfileEditScreen() {
               placeholder="Parle un peu de toi"
               placeholderTextColor="#8493A8"
             />
+
             <Text style={styles.counter}>
               {bio.length}/{BIO_MAX}
             </Text>
 
-            {!!error && <Text style={styles.error}>{error}</Text>}
+            {!!error && (
+              <Text style={styles.error}>{error}</Text>
+            )}
 
             <Pressable
-              style={[styles.saveButton, saving && styles.saveDisabled]}
+              style={[
+                styles.saveButton,
+                saving && styles.saveDisabled,
+              ]}
               onPress={handleSave}
               disabled={saving}
             >
@@ -236,6 +320,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     minHeight: 48,
     marginBottom: 8,
+  },
+  usernameHint: {
+    color: '#8493A8',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 12,
   },
   bioInput: {
     minHeight: 100,

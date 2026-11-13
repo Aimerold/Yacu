@@ -10,8 +10,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
 import { Redirect, useRouter } from 'expo-router';
+import { supabase } from '@/lib/supabase';
 import { resendSignupCode } from '@/services/auth.service';
 import {
   registerForPushNotificationsAsync,
@@ -27,18 +27,16 @@ const C = {
   muted: '#A8B6C8',
 };
 
-
 function friendlyAuthError(error: unknown): string {
-  if (!(error instanceof Error)) return 'Une erreur est survenue.';
-
+  if (!(error instanceof Error)) {
+    return 'Une erreur est survenue.';
+  }
 
   const text = error.message.toLowerCase();
-
 
   if (text.includes('invalid login credentials')) {
     return 'E-mail ou mot de passe incorrect.';
   }
-
 
   if (
     text.includes('already registered') ||
@@ -47,25 +45,23 @@ function friendlyAuthError(error: unknown): string {
     return 'Un compte existe déjà avec cette adresse e-mail.';
   }
 
-
   if (text.includes('database error saving new user')) {
     return "Création impossible : ce nom d'utilisateur est peut-être déjà pris.";
   }
 
-
-  if (text.includes('rate limit') || text.includes('security purposes')) {
+  if (
+    text.includes('rate limit') ||
+    text.includes('security purposes')
+  ) {
     return 'Trop de tentatives. Réessaie dans quelques minutes.';
   }
-
 
   if (text.includes('network') || text.includes('fetch')) {
     return 'Connexion impossible. Vérifie ton réseau.';
   }
 
-
   return error.message;
 }
-
 
 /**
  * Enregistre le token de notification pour l'utilisateur connecté.
@@ -84,13 +80,16 @@ async function registerPushTokenForCurrentUser() {
       await savePushToken(userId, token);
     }
   } catch (error) {
-    console.error('[Yacu Notifications] Enregistrement du token échoué :', error);
+    console.error(
+      '[Yacu Notifications] Enregistrement du token échoué :',
+      error
+    );
   }
 }
 
-
 export default function HomeScreen() {
   const router = useRouter();
+
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -101,25 +100,27 @@ export default function HomeScreen() {
   const [sessionActive, setSessionActive] = useState(false);
   const [message, setMessage] = useState('');
 
-
   useEffect(() => {
     let mounted = true;
 
-
     supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return;
-      if (error) setMessage(error.message);
+
+      if (error) {
+        setMessage(error.message);
+      }
+
       setSessionActive(!!data.session);
       setCheckingSession(false);
     });
 
-
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        if (mounted) setSessionActive(!!session);
+        if (mounted) {
+          setSessionActive(!!session);
+        }
       }
     );
-
 
     return () => {
       mounted = false;
@@ -127,33 +128,66 @@ export default function HomeScreen() {
     };
   }, []);
 
-
   async function handleAuth() {
-    setMessage('');
+    if (loading) return;
 
+    setMessage('');
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanUsername = username.trim().toLowerCase();
-
 
     if (!cleanEmail || !password) {
       setMessage('Remplis ton adresse e-mail et ton mot de passe.');
       return;
     }
 
-
     if (password.length < 8) {
-      setMessage('Le mot de passe doit contenir au moins 8 caractères.');
+      setMessage(
+        'Le mot de passe doit contenir au moins 8 caractères.'
+      );
       return;
     }
 
-
     if (mode === 'signup') {
-      if (!/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
-        setMessage('Le nom utilisateur doit contenir 3 à 20 caractères : lettres, chiffres ou _.');
+      if (!cleanUsername) {
+        setMessage("Saisis un nom d'utilisateur.");
         return;
       }
 
+      if (cleanUsername.length < 3) {
+        setMessage(
+          "Le nom d'utilisateur doit contenir au moins 3 caractères."
+        );
+        return;
+      }
+
+      if (cleanUsername.length > 20) {
+        setMessage(
+          "Le nom d'utilisateur ne peut pas dépasser 20 caractères."
+        );
+        return;
+      }
+
+      if (/\s/.test(cleanUsername)) {
+        setMessage(
+          "Le nom d'utilisateur ne doit pas contenir d'espace. Utilise _ pour séparer les mots."
+        );
+        return;
+      }
+
+      if (cleanUsername.includes('@')) {
+        setMessage(
+          "Saisis ton nom d'utilisateur sans le symbole @."
+        );
+        return;
+      }
+
+      if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
+        setMessage(
+          "Le nom d'utilisateur accepte uniquement les lettres de a à z, les chiffres et _. Les accents, points et tirets ne sont pas autorisés."
+        );
+        return;
+      }
 
       if (!displayName.trim()) {
         setMessage('Saisis ton nom complet.');
@@ -161,9 +195,7 @@ export default function HomeScreen() {
       }
     }
 
-
     setLoading(true);
-
 
     try {
       if (mode === 'login') {
@@ -171,9 +203,9 @@ export default function HomeScreen() {
           email: cleanEmail,
           password,
         });
+
         if (error) throw error;
 
-        // Enregistrer le token de notification après connexion
         await registerPushTokenForCurrentUser();
       } else {
         const { data, error } = await supabase.auth.signUp({
@@ -187,12 +219,9 @@ export default function HomeScreen() {
           },
         });
 
-
         if (error) throw error;
 
-
         if (!data.session) {
-          // Confirmation d'e-mail requise : on passe à l'écran de saisie du code.
           router.push({
             pathname: '/verify-email',
             params: { email: cleanEmail },
@@ -200,7 +229,6 @@ export default function HomeScreen() {
         } else {
           setMessage('Ton compte Yacu a été créé avec succès.');
 
-          // Enregistrer le token si une session existe déjà
           await registerPushTokenForCurrentUser();
         }
       }
@@ -210,10 +238,9 @@ export default function HomeScreen() {
         error instanceof Error &&
         error.message.toLowerCase().includes('email not confirmed');
 
-
       if (notConfirmed) {
-        // Compte créé mais e-mail jamais confirmé : on renvoie un code.
         await resendSignupCode(cleanEmail).catch(() => undefined);
+
         router.push({
           pathname: '/verify-email',
           params: { email: cleanEmail },
@@ -226,7 +253,6 @@ export default function HomeScreen() {
     }
   }
 
-
   if (checkingSession) {
     return (
       <View style={styles.loadingScreen}>
@@ -236,11 +262,9 @@ export default function HomeScreen() {
     );
   }
 
-
   if (sessionActive) {
     return <Redirect href="/(app)/(tabs)/chats" />;
   }
-
 
   return (
     <SafeAreaView style={styles.container}>
@@ -253,50 +277,61 @@ export default function HomeScreen() {
             <View style={styles.logoCircle}>
               <Text style={styles.logoLetter}>Y</Text>
             </View>
-            <Text style={styles.logo}>YACU</Text>
-            <Text style={styles.muted}>Reste proche de ceux qui comptent.</Text>
-          </View>
 
+            <Text style={styles.logo}>YACU</Text>
+
+            <Text style={styles.muted}>
+              Reste proche de ceux qui comptent.
+            </Text>
+          </View>
 
           <View style={styles.card}>
             <Text style={styles.heading}>
-              {mode === 'login' ? 'Content de te revoir' : 'Rejoins Yacu'}
+              {mode === 'login'
+                ? 'Content de te revoir'
+                : 'Rejoins Yacu'}
             </Text>
+
             <Text style={styles.muted}>
               {mode === 'login'
                 ? 'Connecte-toi pour retrouver tes amis.'
                 : 'Crée ton compte et commence à discuter.'}
             </Text>
 
-
             {mode === 'signup' && (
               <>
                 <Text style={styles.label}>Nom complet</Text>
+
                 <TextInput
                   style={styles.input}
-                  placeholder="Ton nom"
+                  placeholder="Ton Nom au Complet"
                   placeholderTextColor={C.muted}
                   value={displayName}
                   onChangeText={setDisplayName}
                   autoCapitalize="words"
                 />
 
-
                 <Text style={styles.label}>Nom d'utilisateur</Text>
+
                 <TextInput
                   style={styles.input}
-                  placeholder="exemple : aimerold"
+                  placeholder="exemple : Aimeroldbouanga en un seul mot"
                   placeholderTextColor={C.muted}
                   value={username}
                   onChangeText={setUsername}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
+
+                <Text style={styles.usernameHint}>
+                  lettres sans accent,
+                  chiffres et _. Sans espace ni @.
+                </Text>
               </>
             )}
 
-
             <Text style={styles.label}>Adresse e-mail</Text>
+
             <TextInput
               style={styles.input}
               placeholder="exemple@email.com"
@@ -308,8 +343,8 @@ export default function HomeScreen() {
               autoCorrect={false}
             />
 
-
             <Text style={styles.label}>Mot de passe</Text>
+
             <TextInput
               style={styles.input}
               placeholder="Minimum 8 caractères"
@@ -320,23 +355,27 @@ export default function HomeScreen() {
               autoCapitalize="none"
             />
 
-
             {mode === 'login' && (
               <Pressable
                 style={styles.forgot}
                 onPress={() => router.push('/forgot-password')}
                 hitSlop={8}
               >
-                <Text style={styles.switchLink}>Mot de passe oublié ?</Text>
+                <Text style={styles.switchLink}>
+                  Mot de passe oublié ?
+                </Text>
               </Pressable>
             )}
 
-
-            {!!message && <Text style={styles.message}>{message}</Text>}
-
+            {!!message && (
+              <Text style={styles.message}>{message}</Text>
+            )}
 
             <Pressable
-              style={[styles.button, loading && styles.disabled]}
+              style={[
+                styles.button,
+                loading && styles.disabled,
+              ]}
               onPress={handleAuth}
               disabled={loading}
             >
@@ -344,11 +383,12 @@ export default function HomeScreen() {
                 <ActivityIndicator color={C.white} />
               ) : (
                 <Text style={styles.buttonText}>
-                  {mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
+                  {mode === 'login'
+                    ? 'Se connecter'
+                    : 'Créer mon compte'}
                 </Text>
               )}
             </Pressable>
-
 
             <View style={styles.switchRow}>
               <Text style={styles.muted}>
@@ -356,27 +396,32 @@ export default function HomeScreen() {
                   ? 'Tu n’as pas encore de compte ?'
                   : 'Tu as déjà un compte ?'}
               </Text>
+
               <Pressable
                 onPress={() => {
-                  setMode(mode === 'login' ? 'signup' : 'login');
+                  setMode(
+                    mode === 'login' ? 'signup' : 'login'
+                  );
                   setMessage('');
                 }}
               >
                 <Text style={styles.switchLink}>
-                  {mode === 'login' ? ' S’inscrire' : ' Se connecter'}
+                  {mode === 'login'
+                    ? ' S’inscrire'
+                    : ' Se connecter'}
                 </Text>
               </Pressable>
             </View>
           </View>
 
-
-          <Text style={styles.footer}>Yacu · Connectés, partout.</Text>
+          <Text style={styles.footer}>
+            Yacu · Connectés, partout.
+          </Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
@@ -452,6 +497,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     borderWidth: 1,
     borderColor: '#263C57',
+  },
+  usernameHint: {
+    color: C.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
   },
   forgot: {
     alignSelf: 'flex-end',

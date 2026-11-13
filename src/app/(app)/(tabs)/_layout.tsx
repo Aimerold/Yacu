@@ -58,6 +58,21 @@ export default function TabsLayout() {
       />
 
       <Tabs.Screen
+        name="jobs"
+        options={{
+          title: 'Jobs',
+          tabBarLabel: 'Jobs',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'briefcase' : 'briefcase-outline'}
+              size={size}
+              color={color as string}
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
         name="settings"
         options={{
           title: 'Paramètres',

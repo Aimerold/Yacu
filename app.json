@@ -14,7 +14,7 @@
       "package": "yacu.com.app",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#081426",
         "foregroundImage": "./assets/images/aimerold.png",
         "backgroundImage": "./assets/images/aimerold.png",
         "monochromeImage": "./assets/images/aimerold.png"
@@ -32,7 +32,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#081426",
           "image": "./assets/images/aimerold.png",
           "imageWidth": 76
         }
@@ -40,7 +40,7 @@
       [
         "expo-notifications",
         {
-          "color": "#208AEF",
+          "color": "#081426",
           "defaultChannel": "messages"
         }
       ]
