@@ -15,7 +15,7 @@ import AppHeader from '@/components/layout/AppHeader';
 import Avatar from '@/components/ui/Avatar';
 import FriendActionButton from '@/features/contacts/components/FriendActionButton';
 import { useFriendships } from '@/features/contacts/hooks/useFriendships';
-import { searchUsers } from '@/services/users.service';
+import { searchUsers } from '@/services/user-search.service';
 import type { Profile } from '@/services/profile.service';
 import type { FriendshipRequest, RelationState } from '@/services/friendship.service';
 import { colors } from '@/theme/tokens';

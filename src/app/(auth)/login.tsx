@@ -42,7 +42,7 @@ function friendlyAuthError(error: unknown): string {
     text.includes('already registered') ||
     text.includes('already been registered')
   ) {
-    return 'Un compte existe déjà avec cette adresse e-mail.';
+    return 'Cette adresse e-mail possède peut-être déjà un compte Yacu. Utilise « Se connecter » ou « Mot de passe oublié ».';
   }
 
   if (text.includes('database error saving new user')) {
@@ -219,7 +219,23 @@ export default function HomeScreen() {
           },
         });
 
-        if (error) throw error;
+        if (error) {
+          const signUpMessage = error.message.toLowerCase();
+
+          if (
+            signUpMessage.includes('user already registered') ||
+            signUpMessage.includes('already registered') ||
+            signUpMessage.includes('already been registered')
+          ) {
+            setMessage(
+              'Cette adresse e-mail possède peut-être déjà un compte Yacu. Utilise « Se connecter » ou « Mot de passe oublié ».'
+            );
+
+            return;
+          }
+
+          throw error;
+        }
 
         if (!data.session) {
           router.push({
@@ -324,7 +340,7 @@ export default function HomeScreen() {
                 />
 
                 <Text style={styles.usernameHint}>
-                  lettres sans accent,
+                  De 3 à 20 caractères : lettres sans accent,
                   chiffres et _. Sans espace ni @.
                 </Text>
               </>

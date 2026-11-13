@@ -16,17 +16,19 @@ function json(body: unknown, status = 200): Response {
 
 type AdminClient = ReturnType<typeof createClient>;
 
-const BUCKET = 'chat-images';
+const CHAT_BUCKET = 'chat-images';
+const AVATARS_BUCKET = 'avatars';
 const PAGE = 100;
 
-/** Supprime tous les fichiers d'un dossier <conversation>/<expéditeur>. */
+/** Supprime tous les fichiers d'un dossier d'un bucket. */
 async function removeFolderFiles(
   admin: AdminClient,
+  bucket: string,
   folder: string
 ): Promise<void> {
   while (true) {
     const { data, error } = await admin.storage
-      .from(BUCKET)
+      .from(bucket)
       .list(folder, { limit: PAGE });
 
     if (error) throw new Error(error.message);
@@ -36,7 +38,7 @@ async function removeFolderFiles(
     if (files.length === 0) return;
 
     const { error: removeError } = await admin.storage
-      .from(BUCKET)
+      .from(bucket)
       .remove(files.map((file) => `${folder}/${file.name}`));
 
     if (removeError) throw new Error(removeError.message);
@@ -51,7 +53,7 @@ async function removeConversationImages(
   conversationId: string
 ): Promise<void> {
   const { data, error } = await admin.storage
-    .from(BUCKET)
+    .from(CHAT_BUCKET)
     .list(conversationId, { limit: 1000 });
 
   if (error) throw new Error(error.message);
@@ -60,7 +62,7 @@ async function removeConversationImages(
   const senderFolders = (data ?? []).filter((entry) => entry.id === null);
 
   for (const folder of senderFolders) {
-    await removeFolderFiles(admin, `${conversationId}/${folder.name}`);
+    await removeFolderFiles(admin, CHAT_BUCKET, `${conversationId}/${folder.name}`);
   }
 }
 
@@ -78,6 +80,7 @@ Deno.serve(async (request) => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
   if (!supabaseUrl || !anonKey || !serviceKey) {
+    console.error('delete-account: configuration serveur incomplète');
     return json({ error: 'server_misconfigured' }, 500);
   }
 
@@ -101,7 +104,7 @@ Deno.serve(async (request) => {
 
   const user = userData.user;
 
-  // 2. Confirmation par mot de passe
+  // 2. Confirmation par mot de passe, vérifiée ici
   let password = '';
 
   try {
@@ -146,7 +149,21 @@ Deno.serve(async (request) => {
       await removeConversationImages(admin, membership.conversation_id);
     }
 
-    // 4. Profil : supprime en cascade conversations, messages, blocages et signalements
+    // 4. Photo de profil
+    await removeFolderFiles(admin, AVATARS_BUCKET, user.id);
+
+    // 5. Jetons de notification (sans gravité si la table diffère)
+    const { error: tokensError } = await admin
+      .from('device_tokens')
+      .delete()
+      .eq('user_id', user.id);
+
+    if (tokensError) {
+      console.error('delete-account: jetons non supprimés:', tokensError.message);
+    }
+
+    // 6. Profil : supprime en cascade conversations, messages, blocages,
+    //    signalements, amitiés, réglages et présence
     const { error: profileError } = await admin
       .from('profiles')
       .delete()
@@ -154,7 +171,7 @@ Deno.serve(async (request) => {
 
     if (profileError) throw new Error(profileError.message);
 
-    // 5. Compte d'authentification
+    // 7. Compte d'authentification
     const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
 
     if (deleteError) throw new Error(deleteError.message);
