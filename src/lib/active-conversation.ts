@@ -8,3 +8,5 @@ export function setActiveConversationId(conversationId: string | null): void {
 export function getActiveConversationId(): string | null {
   return activeConversationId;
 }
+
+

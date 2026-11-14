@@ -2,11 +2,14 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppPresence } from '@/features/presence/hooks/useAppPresence';
 import { useFriendships } from '@/features/contacts/hooks/useFriendships';
+import { usePushNotifications } from '@/features/notifications/hooks/usePushNotifications';
 import { colors } from '@/theme/tokens';
 
 export default function TabsLayout() {
   // Battement de cœur de présence + marquage « reçu », pour toute la zone connectée
   useAppPresence();
+  // Enregistrement du jeton de notification + ouverture de la bonne conversation au toucher
+  usePushNotifications();
   const { incomingCount } = useFriendships({ loadLists: false });
 
   return (

@@ -59,8 +59,6 @@ import { formatMessageTime } from '@/utils/format';
 import ConversationHeader from '@/features/messages/components/ConversationHeader';
 
 
-
-
 /**
  * Décalage du clavier : UN SEUL mécanisme, KeyboardAvoidingView.
  * Avec l'affichage bord à bord d'Expo/Android récents, le système ne redimensionne
