@@ -456,7 +456,7 @@ export default function ConversationScreen() {
         setMessages((previous) =>
           previous.filter((item) => item.id !== message.id)
         );
-        setNotice("Tu ne peux plus envoye de messages a cette personne il/elle vous bloquez");
+        setNotice("Tu ne peux plus envoyer de messages à cette personne. Elle vous a bloqué");
         return;
       }
 
