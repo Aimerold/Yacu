@@ -4,20 +4,20 @@
     "slug": "Yacu",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/aimerold.png",
+    "icon": "./assets/images/LogoYacu.png",
     "scheme": "yacu",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/aimerold.png"
+      "icon": "./assets/images/LogoYacu.png"
     },
     "android": {
       "package": "yacu.com.app",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#081426",
-        "foregroundImage": "./assets/images/aimerold.png",
-        "backgroundImage": "./assets/images/aimerold.png",
-        "monochromeImage": "./assets/images/aimerold.png"
+        "foregroundImage": "./assets/images/LogoYacu.png", 
+        "backgroundImage": "./assets/images/LogoYacu.png",
+        "monochromeImage": "./assets/images/LogoYacu.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -32,15 +32,15 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#081426",
-          "image": "./assets/images/aimerold.png",
-          "imageWidth": 76
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/images/LogoYacu.png",
+          "imageWidth": 100
         }
       ],
       [
         "expo-notifications",
         {
-          "color": "#081426",
+          "color": "#FF7900",
           "defaultChannel": "messages"
         }
       ]
