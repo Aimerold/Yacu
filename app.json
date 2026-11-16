@@ -4,26 +4,27 @@
     "slug": "Yacu",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/LogoYacu.png",
+    "icon": "./assets/images/iconemoderne.png",
     "scheme": "yacu",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/LogoYacu.png"
+      "icon": "./assets/images/iconemoderne.png"
     },
     "android": {
       "package": "yacu.com.app",
       "googleServicesFile": "./google-services.json",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#081426",
-        "foregroundImage": "./assets/images/LogoYacu.png", 
-        "backgroundImage": "./assets/images/LogoYacu.png",
+        "backgroundColor": "#FF7900",
+        "foregroundImage": "./assets/images/iconemoderne.png", 
+        "backgroundImage": "./assets/images/iconemoderne.png",
         "monochromeImage": "./assets/images/LogoYacu.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "server",
-      "favicon": "./assets/images/aimerold.png"
+      "favicon": "./assets/images/iconemoderne.png"
     },
 
     
@@ -32,9 +33,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FFFFFF",
+          "backgroundColor": "#081426",
           "image": "./assets/images/LogoYacu.png",
-          "imageWidth": 100
+          "imageWidth": 250
         }
       ],
       [

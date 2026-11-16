@@ -4,11 +4,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -17,6 +19,7 @@ import {
   registerForPushNotificationsAsync,
   savePushToken,
 } from '@/lib/notifications';
+
 
 
 const C = {
@@ -29,18 +32,22 @@ const C = {
 };
 
 
+
 function friendlyAuthError(error: unknown): string {
   if (!(error instanceof Error)) {
     return 'Une erreur est survenue.';
   }
 
 
+
   const text = error.message.toLowerCase();
+
 
 
   if (text.includes('invalid login credentials')) {
     return 'E-mail ou mot de passe incorrect.';
   }
+
 
 
   if (
@@ -51,9 +58,11 @@ function friendlyAuthError(error: unknown): string {
   }
 
 
+
   if (text.includes('database error saving new user')) {
     return "Création impossible : ce nom d'utilisateur est peut-être déjà pris.";
   }
+
 
 
   if (
@@ -64,13 +73,16 @@ function friendlyAuthError(error: unknown): string {
   }
 
 
+
   if (text.includes('network') || text.includes('fetch')) {
     return 'Connexion impossible. Vérifie ton réseau.';
   }
 
 
+
   return error.message;
 }
+
 
 
 /**
@@ -82,23 +94,29 @@ async function registerPushTokenForCurrentUser() {
     '[Yacu Notifications] 0. registerPushTokenForCurrentUser appelée.'
   );
 
+
   try {
     const token = await registerForPushNotificationsAsync();
+
 
     console.log(
       '[Yacu Notifications] Jeton reçu :',
       token ? 'oui' : 'non'
     );
 
+
     if (!token) return;
+
 
     const { data } = await supabase.auth.getUser();
     const userId = data.user?.id;
+
 
     console.log(
       '[Yacu Notifications] Utilisateur connecté :',
       userId ? 'oui' : 'non'
     );
+
 
     if (userId) {
       await savePushToken(userId, token);
@@ -112,8 +130,10 @@ async function registerPushTokenForCurrentUser() {
 }
 
 
+
 export default function HomeScreen() {
   const router = useRouter();
+
 
 
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -121,18 +141,22 @@ export default function HomeScreen() {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [sessionActive, setSessionActive] = useState(false);
   const [message, setMessage] = useState('');
 
 
+
   useEffect(() => {
     let mounted = true;
 
 
+
     supabase.auth.getSession().then(async ({ data, error }) => {
       if (!mounted) return;
+
 
 
       if (error) {
@@ -140,13 +164,16 @@ export default function HomeScreen() {
       }
 
 
+
       setSessionActive(!!data.session);
       setCheckingSession(false);
+
 
       if (data.session) {
         await registerPushTokenForCurrentUser();
       }
     });
+
 
 
     const { data: listener } = supabase.auth.onAuthStateChange(
@@ -158,6 +185,7 @@ export default function HomeScreen() {
     );
 
 
+
     return () => {
       mounted = false;
       listener.subscription.unsubscribe();
@@ -165,21 +193,26 @@ export default function HomeScreen() {
   }, []);
 
 
+
   async function handleAuth() {
     if (loading) return;
 
 
+
     setMessage('');
+
 
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanUsername = username.trim().toLowerCase();
 
 
+
     if (!cleanEmail || !password) {
       setMessage('Remplis ton adresse e-mail et ton mot de passe.');
       return;
     }
+
 
 
     if (password.length < 8) {
@@ -190,11 +223,13 @@ export default function HomeScreen() {
     }
 
 
+
     if (mode === 'signup') {
       if (!cleanUsername) {
         setMessage("Saisis un nom d'utilisateur.");
         return;
       }
+
 
 
       if (cleanUsername.length < 3) {
@@ -205,12 +240,14 @@ export default function HomeScreen() {
       }
 
 
+
       if (cleanUsername.length > 20) {
         setMessage(
           "Le nom d'utilisateur ne peut pas dépasser 20 caractères."
         );
         return;
       }
+
 
 
       if (/\s/.test(cleanUsername)) {
@@ -221,12 +258,14 @@ export default function HomeScreen() {
       }
 
 
+
       if (cleanUsername.includes('@')) {
         setMessage(
           "Saisis ton nom d'utilisateur sans le symbole @."
         );
         return;
       }
+
 
 
       if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
@@ -237,6 +276,7 @@ export default function HomeScreen() {
       }
 
 
+
       if (!displayName.trim()) {
         setMessage('Saisis ton nom complet.');
         return;
@@ -244,7 +284,9 @@ export default function HomeScreen() {
     }
 
 
+
     setLoading(true);
+
 
 
     try {
@@ -255,7 +297,9 @@ export default function HomeScreen() {
         });
 
 
+
         if (error) throw error;
+
 
 
         await registerPushTokenForCurrentUser();
@@ -272,8 +316,10 @@ export default function HomeScreen() {
         });
 
 
+
         if (error) {
           const signUpMessage = error.message.toLowerCase();
+
 
 
           if (
@@ -286,12 +332,15 @@ export default function HomeScreen() {
             );
 
 
+
             return;
           }
 
 
+
           throw error;
         }
+
 
 
         if (!data.session) {
@@ -301,6 +350,7 @@ export default function HomeScreen() {
           });
         } else {
           setMessage('Ton compte Yacu a été créé avec succès.');
+
 
 
           await registerPushTokenForCurrentUser();
@@ -313,8 +363,10 @@ export default function HomeScreen() {
         error.message.toLowerCase().includes('email not confirmed');
 
 
+
       if (notConfirmed) {
         await resendSignupCode(cleanEmail).catch(() => undefined);
+
 
 
         router.push({
@@ -330,6 +382,7 @@ export default function HomeScreen() {
   }
 
 
+
   if (checkingSession) {
     return (
       <View style={styles.loadingScreen}>
@@ -340,9 +393,11 @@ export default function HomeScreen() {
   }
 
 
+
   if (sessionActive) {
     return <Redirect href="/(app)/(tabs)/chats" />;
   }
+
 
 
   return (
@@ -350,21 +405,30 @@ export default function HomeScreen() {
       <KeyboardAvoidingView
         style={styles.keyboard}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
       >
-        <View style={styles.content}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={true}
+        >
           <View style={styles.brand}>
             <View style={styles.logoCircle}>
               <Text style={styles.logoLetter}>Y</Text>
             </View>
 
 
+
             <Text style={styles.logo}>YACU</Text>
+
 
 
             <Text style={styles.muted}>
               Reste proche de ceux qui comptent.
             </Text>
           </View>
+
 
 
           <View style={styles.card}>
@@ -375,6 +439,7 @@ export default function HomeScreen() {
             </Text>
 
 
+
             <Text style={styles.muted}>
               {mode === 'login'
                 ? 'Connecte-toi pour retrouver tes amis.'
@@ -382,9 +447,11 @@ export default function HomeScreen() {
             </Text>
 
 
+
             {mode === 'signup' && (
               <>
                 <Text style={styles.label}>Nom complet</Text>
+
 
 
                 <TextInput
@@ -397,7 +464,9 @@ export default function HomeScreen() {
                 />
 
 
+
                 <Text style={styles.label}>Nom d'utilisateur</Text>
+
 
 
                 <TextInput
@@ -411,6 +480,7 @@ export default function HomeScreen() {
                 />
 
 
+
                 <Text style={styles.usernameHint}>
                   De 3 à 20 caractères : lettres sans accent,
                   chiffres et _. Sans espace ni @.
@@ -419,7 +489,9 @@ export default function HomeScreen() {
             )}
 
 
+
             <Text style={styles.label}>Adresse e-mail</Text>
+
 
 
             <TextInput
@@ -434,18 +506,41 @@ export default function HomeScreen() {
             />
 
 
+
             <Text style={styles.label}>Mot de passe</Text>
 
 
-            <TextInput
-              style={styles.input}
-              placeholder="Minimum 8 caractères"
-              placeholderTextColor={C.muted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-            />
+
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Minimum 8 caractères"
+                placeholderTextColor={C.muted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+              />
+
+
+
+              <Pressable
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={10}
+                accessibilityLabel={
+                  showPassword
+                    ? 'Masquer le mot de passe'
+                    : 'Afficher le mot de passe'
+                }
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={22}
+                  color={C.muted}
+                />
+              </Pressable>
+            </View>
+
 
 
             {mode === 'login' && (
@@ -461,9 +556,11 @@ export default function HomeScreen() {
             )}
 
 
+
             {!!message && (
               <Text style={styles.message}>{message}</Text>
             )}
+
 
 
             <Pressable
@@ -486,12 +583,14 @@ export default function HomeScreen() {
             </Pressable>
 
 
+
             <View style={styles.switchRow}>
               <Text style={styles.muted}>
                 {mode === 'login'
                   ? 'Tu n’as pas encore de compte ?'
                   : 'Tu as déjà un compte ?'}
               </Text>
+
 
 
               <Pressable
@@ -512,14 +611,16 @@ export default function HomeScreen() {
           </View>
 
 
+
           <Text style={styles.footer}>
             Yacu · Connectés, partout.
           </Text>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
 
 
 const styles = StyleSheet.create({
@@ -530,11 +631,15 @@ const styles = StyleSheet.create({
   keyboard: {
     flex: 1,
   },
-  content: {
+  scroll: {
     flex: 1,
+  },
+  content: {
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 24,
+    paddingTop: 24,
+    paddingBottom: 180,
     width: '100%',
     maxWidth: 520,
     alignSelf: 'center',
@@ -596,6 +701,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     borderWidth: 1,
     borderColor: '#263C57',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.input,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#263C57',
+    paddingHorizontal: 15,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 14,
+    color: C.white,
+    fontSize: 15,
   },
   usernameHint: {
     color: C.muted,
