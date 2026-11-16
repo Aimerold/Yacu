@@ -7,27 +7,14 @@ import { getActiveConversationId } from '@/lib/active-conversation';
 import { supabase } from '@/lib/supabase';
 
 
+
 /** Identifiant du canal Android : la fonction serveur d'envoi utilise la même valeur. */
 export const ANDROID_MESSAGES_CHANNEL_ID = 'messages';
 
 
+
 const TOKEN_STORAGE_KEY = 'yacu.expo_push_token';
-const LOG_PREFIX = '[Yacu Notifications]';
 
-
-function log(message: string, detail?: unknown): void {
-  if (detail === undefined) {
-    console.log(`${LOG_PREFIX} ${message}`);
-  } else {
-    console.log(`${LOG_PREFIX} ${message}`, detail);
-  }
-}
-
-
-/** Masque le jeton dans les journaux : ExponentPushToken[abcd…] */
-function maskToken(token: string): string {
-  return token.length > 24 ? `${token.slice(0, 22)}…]` : token;
-}
 
 
 /**
@@ -38,20 +25,17 @@ function maskToken(token: string): string {
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
     handleNotification: async (notification) => {
-      console.log(
-        '[Yacu Notifications] Notification reçue :',
-        notification.request.content.data
-      );
-
       const data = notification.request.content.data as
         | { conversationId?: unknown }
         | null
         | undefined;
 
 
+
       const inOpenConversation =
         typeof data?.conversationId === 'string' &&
         data.conversationId === getActiveConversationId();
+
 
 
       return {
@@ -65,6 +49,7 @@ if (Platform.OS !== 'web') {
 }
 
 
+
 /**
  * Prépare l'appareil et récupère son Expo Push Token.
  *
@@ -75,18 +60,16 @@ if (Platform.OS !== 'web') {
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   // V1 : notifications Android uniquement.
   if (Platform.OS !== 'android') {
-    log('plateforme non prise en charge en V1 :', Platform.OS);
     return null;
   }
 
-
-  log(`1/5 Android, appareil physique : ${Device.isDevice}`);
 
 
   // Les notifications push nécessitent un appareil physique.
   if (!Device.isDevice) {
     throw new Error('Les notifications push nécessitent un appareil physique.');
   }
+
 
 
   // Canal Android créé avant la demande de permission.
@@ -98,11 +81,12 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#FF8A32',
   });
-  log('2/5 canal Android prêt');
+
 
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
+
 
 
   if (existingStatus !== 'granted') {
@@ -111,20 +95,17 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 
 
-  log(`3/5 permission : ${finalStatus}`);
-
 
   if (finalStatus !== 'granted') {
     return null;
   }
 
 
+
   const projectId =
     Constants.expoConfig?.extra?.eas?.projectId ??
     Constants.easConfig?.projectId;
 
-
-  log(`4/5 projectId EAS : ${projectId ? 'présent' : 'ABSENT'}`);
 
 
   if (!projectId) {
@@ -134,11 +115,10 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 
 
+
   try {
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
 
-
-    log(`5/5 jeton obtenu : ${maskToken(token.data)}`);
 
 
     // Mémorisé pour pouvoir le retirer à la déconnexion, même après un redémarrage.
@@ -147,22 +127,25 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     );
 
 
+
     return token.data;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
 
+
     if (/firebase|fcm/i.test(message)) {
-      log(
-        'La configuration FCM manque dans ce build (google-services.json). ' +
-          'Ajoute-la puis reconstruis le build de développement.'
+      console.error(
+        '[Yacu Notifications] La configuration FCM manque dans ce build (google-services.json). Ajoute-la puis reconstruis le build de développement.'
       );
     }
+
 
 
     throw error;
   }
 }
+
 
 
 /**
@@ -181,16 +164,24 @@ export async function savePushToken(
   });
 
 
+
   if (error) {
-    log('échec de register_device_token :', {
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-    });
+    console.error(
+      '[Yacu Notifications] Erreur lors de l’enregistrement du jeton :',
+      {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      }
+    );
+
+
+
     throw new Error(error.message);
   }
 }
+
 
 
 export type PushRegistrationResult =
@@ -198,6 +189,7 @@ export type PushRegistrationResult =
   | 'unsupported'
   | 'denied'
   | 'error';
+
 
 
 /**
@@ -208,26 +200,35 @@ export async function registerAndSavePushToken(): Promise<PushRegistrationResult
   if (Platform.OS !== 'android') return 'unsupported';
 
 
+
   try {
     const token = await registerForPushNotificationsAsync();
 
 
+
     if (!token) {
-      log('aucun jeton : permission refusée');
       return 'denied';
     }
 
 
+
     await savePushToken('', token);
-    log(`jeton enregistré en base : ${maskToken(token)}`);
+
 
 
     return 'registered';
   } catch (error) {
-    console.error(`${LOG_PREFIX} Enregistrement du token échoué :`, error);
+    console.error(
+      '[Yacu Notifications] Enregistrement du token échoué :',
+      error
+    );
+
+
+
     return 'error';
   }
 }
+
 
 
 /**
@@ -240,10 +241,12 @@ export async function deletePushToken(expoPushToken: string): Promise<void> {
     .eq('expo_push_token', expoPushToken);
 
 
+
   if (error) {
     throw new Error(error.message);
   }
 }
+
 
 
 /**
@@ -256,16 +259,18 @@ export async function unregisterStoredPushToken(): Promise<void> {
     const token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
 
 
+
     if (!token) return;
+
 
 
     await deletePushToken(token);
     await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
-    log('jeton retiré de la base');
   } catch {
     // Hors ligne : le jeton sera réaffecté au prochain compte qui se connecte ici.
   }
 }
+
 
 
 /**
@@ -282,12 +287,15 @@ export function addNotificationListeners(
   }
 
 
+
   const receivedSubscription =
     Notifications.addNotificationReceivedListener(onReceived);
 
 
+
   const responseSubscription =
     Notifications.addNotificationResponseReceivedListener(onResponse);
+
 
 
   // Nettoyage des écouteurs.
@@ -296,4 +304,3 @@ export function addNotificationListeners(
     responseSubscription.remove();
   };
 }
-

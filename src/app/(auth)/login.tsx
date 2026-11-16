@@ -22,6 +22,7 @@ import {
 
 
 
+
 const C = {
   background: '#081426',
   surface: '#10223A',
@@ -33,6 +34,7 @@ const C = {
 
 
 
+
 function friendlyAuthError(error: unknown): string {
   if (!(error instanceof Error)) {
     return 'Une erreur est survenue.';
@@ -40,13 +42,16 @@ function friendlyAuthError(error: unknown): string {
 
 
 
+
   const text = error.message.toLowerCase();
+
 
 
 
   if (text.includes('invalid login credentials')) {
     return 'E-mail ou mot de passe incorrect.';
   }
+
 
 
 
@@ -59,9 +64,11 @@ function friendlyAuthError(error: unknown): string {
 
 
 
+
   if (text.includes('database error saving new user')) {
     return "Création impossible : ce nom d'utilisateur est peut-être déjà pris.";
   }
+
 
 
 
@@ -74,9 +81,11 @@ function friendlyAuthError(error: unknown): string {
 
 
 
+
   if (text.includes('network') || text.includes('fetch')) {
     return 'Connexion impossible. Vérifie ton réseau.';
   }
+
 
 
 
@@ -85,38 +94,19 @@ function friendlyAuthError(error: unknown): string {
 
 
 
+
 /**
  * Enregistre le token de notification pour l'utilisateur connecté.
  * Un échec n'empêche jamais la connexion de fonctionner.
  */
 async function registerPushTokenForCurrentUser() {
-  console.log(
-    '[Yacu Notifications] 0. registerPushTokenForCurrentUser appelée.'
-  );
-
-
   try {
     const token = await registerForPushNotificationsAsync();
 
-
-    console.log(
-      '[Yacu Notifications] Jeton reçu :',
-      token ? 'oui' : 'non'
-    );
-
-
     if (!token) return;
-
 
     const { data } = await supabase.auth.getUser();
     const userId = data.user?.id;
-
-
-    console.log(
-      '[Yacu Notifications] Utilisateur connecté :',
-      userId ? 'oui' : 'non'
-    );
-
 
     if (userId) {
       await savePushToken(userId, token);
@@ -131,8 +121,10 @@ async function registerPushTokenForCurrentUser() {
 
 
 
+
 export default function HomeScreen() {
   const router = useRouter();
+
 
 
 
@@ -149,13 +141,16 @@ export default function HomeScreen() {
 
 
 
+
   useEffect(() => {
     let mounted = true;
 
 
 
+
     supabase.auth.getSession().then(async ({ data, error }) => {
       if (!mounted) return;
+
 
 
 
@@ -165,14 +160,17 @@ export default function HomeScreen() {
 
 
 
+
       setSessionActive(!!data.session);
       setCheckingSession(false);
+
 
 
       if (data.session) {
         await registerPushTokenForCurrentUser();
       }
     });
+
 
 
 
@@ -186,6 +184,7 @@ export default function HomeScreen() {
 
 
 
+
     return () => {
       mounted = false;
       listener.subscription.unsubscribe();
@@ -194,12 +193,15 @@ export default function HomeScreen() {
 
 
 
+
   async function handleAuth() {
     if (loading) return;
 
 
 
+
     setMessage('');
+
 
 
 
@@ -208,10 +210,12 @@ export default function HomeScreen() {
 
 
 
+
     if (!cleanEmail || !password) {
       setMessage('Remplis ton adresse e-mail et ton mot de passe.');
       return;
     }
+
 
 
 
@@ -224,11 +228,13 @@ export default function HomeScreen() {
 
 
 
+
     if (mode === 'signup') {
       if (!cleanUsername) {
         setMessage("Saisis un nom d'utilisateur.");
         return;
       }
+
 
 
 
@@ -241,12 +247,14 @@ export default function HomeScreen() {
 
 
 
+
       if (cleanUsername.length > 20) {
         setMessage(
           "Le nom d'utilisateur ne peut pas dépasser 20 caractères."
         );
         return;
       }
+
 
 
 
@@ -259,12 +267,14 @@ export default function HomeScreen() {
 
 
 
+
       if (cleanUsername.includes('@')) {
         setMessage(
           "Saisis ton nom d'utilisateur sans le symbole @."
         );
         return;
       }
+
 
 
 
@@ -277,6 +287,7 @@ export default function HomeScreen() {
 
 
 
+
       if (!displayName.trim()) {
         setMessage('Saisis ton nom complet.');
         return;
@@ -285,7 +296,9 @@ export default function HomeScreen() {
 
 
 
+
     setLoading(true);
+
 
 
 
@@ -298,7 +311,9 @@ export default function HomeScreen() {
 
 
 
+
         if (error) throw error;
+
 
 
 
@@ -317,8 +332,10 @@ export default function HomeScreen() {
 
 
 
+
         if (error) {
           const signUpMessage = error.message.toLowerCase();
+
 
 
 
@@ -333,13 +350,16 @@ export default function HomeScreen() {
 
 
 
+
             return;
           }
 
 
 
+
           throw error;
         }
+
 
 
 
@@ -350,6 +370,7 @@ export default function HomeScreen() {
           });
         } else {
           setMessage('Ton compte Yacu a été créé avec succès.');
+
 
 
 
@@ -364,8 +385,10 @@ export default function HomeScreen() {
 
 
 
+
       if (notConfirmed) {
         await resendSignupCode(cleanEmail).catch(() => undefined);
+
 
 
 
@@ -383,6 +406,7 @@ export default function HomeScreen() {
 
 
 
+
   if (checkingSession) {
     return (
       <View style={styles.loadingScreen}>
@@ -394,9 +418,11 @@ export default function HomeScreen() {
 
 
 
+
   if (sessionActive) {
     return <Redirect href="/(app)/(tabs)/chats" />;
   }
+
 
 
 
@@ -420,7 +446,9 @@ export default function HomeScreen() {
 
 
 
+
             <Text style={styles.logo}>YACU</Text>
+
 
 
 
@@ -428,6 +456,7 @@ export default function HomeScreen() {
               Reste proche de ceux qui comptent.
             </Text>
           </View>
+
 
 
 
@@ -440,6 +469,7 @@ export default function HomeScreen() {
 
 
 
+
             <Text style={styles.muted}>
               {mode === 'login'
                 ? 'Connecte-toi pour retrouver tes amis.'
@@ -448,9 +478,11 @@ export default function HomeScreen() {
 
 
 
+
             {mode === 'signup' && (
               <>
                 <Text style={styles.label}>Nom complet</Text>
+
 
 
 
@@ -465,7 +497,9 @@ export default function HomeScreen() {
 
 
 
+
                 <Text style={styles.label}>Nom d'utilisateur</Text>
+
 
 
 
@@ -481,6 +515,7 @@ export default function HomeScreen() {
 
 
 
+
                 <Text style={styles.usernameHint}>
                   De 3 à 20 caractères : lettres sans accent,
                   chiffres et _. Sans espace ni @.
@@ -490,7 +525,9 @@ export default function HomeScreen() {
 
 
 
+
             <Text style={styles.label}>Adresse e-mail</Text>
+
 
 
 
@@ -507,7 +544,9 @@ export default function HomeScreen() {
 
 
 
+
             <Text style={styles.label}>Mot de passe</Text>
+
 
 
 
@@ -521,6 +560,7 @@ export default function HomeScreen() {
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
               />
+
 
 
 
@@ -543,6 +583,7 @@ export default function HomeScreen() {
 
 
 
+
             {mode === 'login' && (
               <Pressable
                 style={styles.forgot}
@@ -557,9 +598,11 @@ export default function HomeScreen() {
 
 
 
+
             {!!message && (
               <Text style={styles.message}>{message}</Text>
             )}
+
 
 
 
@@ -584,12 +627,14 @@ export default function HomeScreen() {
 
 
 
+
             <View style={styles.switchRow}>
               <Text style={styles.muted}>
                 {mode === 'login'
                   ? 'Tu n’as pas encore de compte ?'
                   : 'Tu as déjà un compte ?'}
               </Text>
+
 
 
 
@@ -612,6 +657,7 @@ export default function HomeScreen() {
 
 
 
+
           <Text style={styles.footer}>
             Yacu · Connectés, partout.
           </Text>
@@ -620,6 +666,7 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
+
 
 
 
