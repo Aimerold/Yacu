@@ -131,6 +131,7 @@ export default function HomeScreen() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -163,6 +164,7 @@ export default function HomeScreen() {
 
       setSessionActive(!!data.session);
       setCheckingSession(false);
+
 
 
 
@@ -230,6 +232,14 @@ export default function HomeScreen() {
 
 
     if (mode === 'signup') {
+      if (password !== confirmPassword) {
+        setMessage('Les mots de passe ne correspondent pas.');
+        return;
+      }
+
+
+
+
       if (!cleanUsername) {
         setMessage("Saisis un nom d'utilisateur.");
         return;
@@ -584,6 +594,55 @@ export default function HomeScreen() {
 
 
 
+            {mode === 'signup' && (
+              <>
+                <Text style={styles.label}>
+                  Confirmer le mot de passe
+                </Text>
+
+
+
+
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder="Confirme ton mot de passe"
+                    placeholderTextColor={C.muted}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                  />
+
+
+
+
+                  <Pressable
+                    onPress={() => setShowPassword(!showPassword)}
+                    hitSlop={10}
+                    accessibilityLabel={
+                      showPassword
+                        ? 'Masquer le mot de passe'
+                        : 'Afficher le mot de passe'
+                    }
+                  >
+                    <Ionicons
+                      name={
+                        showPassword
+                          ? 'eye-off-outline'
+                          : 'eye-outline'
+                      }
+                      size={22}
+                      color={C.muted}
+                    />
+                  </Pressable>
+                </View>
+              </>
+            )}
+
+
+
+
             {mode === 'login' && (
               <Pressable
                 style={styles.forgot}
@@ -644,6 +703,7 @@ export default function HomeScreen() {
                     mode === 'login' ? 'signup' : 'login'
                   );
                   setMessage('');
+                  setConfirmPassword('');
                 }}
               >
                 <Text style={styles.switchLink}>
