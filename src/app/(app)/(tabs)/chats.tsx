@@ -19,17 +19,23 @@ import { subscribeToMyMessages } from '@/services/message.service';
 import { formatListTime } from '@/utils/format';
 import { colors } from '@/theme/tokens';
 
+
+
 function previewOf(conversation: ConversationSummary): string {
   const last = conversation.last_message;
 
+
   if (!last) return 'Aucun message';
 
+
   const text = last.type === 'image' ? '📷 Photo' : last.content ?? '';
+
 
   return last.mine ? `Toi : ${text}` : text;
 }
 
-/** Minuscules et sans accents, pour une recherche tolérante. */
+
+
 function normalize(value: string): string {
   return value
     .toLowerCase()
@@ -37,8 +43,11 @@ function normalize(value: string): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+
+
 export default function ChatsScreen() {
   const router = useRouter();
+
 
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [query, setQuery] = useState('');
@@ -47,30 +56,41 @@ export default function ChatsScreen() {
   const [error, setError] = useState('');
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+
+
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
+
 
     try {
       const result = await getMyConversations();
       setConversations(result);
       setError('');
-    } catch {
-      setError('Impossible de charger tes conversations.');
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : 'Erreur inconnue.';
+
+
+      console.log('[Yacu Chats] Erreur:', e);
+      setError(`Impossible de charger tes conversations : ${message}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
+
+
   useFocusEffect(
     useCallback(() => {
       load();
 
-      // Rafraîchit la liste quand un message arrive (regroupe les rafales).
+
       const unsubscribe = subscribeToMyMessages(() => {
         if (reloadTimer.current) clearTimeout(reloadTimer.current);
         reloadTimer.current = setTimeout(() => load(), 400);
       });
+
 
       return () => {
         if (reloadTimer.current) clearTimeout(reloadTimer.current);
@@ -79,21 +99,34 @@ export default function ChatsScreen() {
     }, [load])
   );
 
+
+
   const trimmedQuery = query.trim();
+
+
 
   const filtered = useMemo(() => {
     const needle = normalize(trimmedQuery);
 
+
     if (!needle) return conversations;
 
-    return conversations.filter((conversation) =>
-      normalize(
-        `${conversation.other_user?.display_name ?? ''} ${
-          conversation.other_user?.username ?? ''
-        }`
-      ).includes(needle)
-    );
+
+    return conversations.filter((conversation) => {
+      const directName =
+        conversation.other_user?.display_name ??
+        conversation.other_user?.username ??
+        '';
+
+
+      const groupName = conversation.name ?? '';
+
+
+      return normalize(`${directName} ${groupName}`).includes(needle);
+    });
   }, [conversations, trimmedQuery]);
+
+
 
   function openConversation(conversationId: string) {
     router.push({
@@ -102,14 +135,38 @@ export default function ChatsScreen() {
     });
   }
 
+
+
+  function openCreateGroup() {
+    router.push('/create-group');
+  }
+
+
+
   const noResults = conversations.length > 0 && !!trimmedQuery;
+
+
 
   return (
     <View style={styles.container}>
       <AppHeader />
 
+
       <View style={styles.body}>
-        <Text style={styles.title}>Conversations</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Conversations</Text>
+
+
+          <Pressable
+            style={styles.createGroupButton}
+            onPress={openCreateGroup}
+            accessibilityLabel="Créer un groupe"
+          >
+            <Ionicons name="people" size={18} color={colors.onAccent} />
+            <Text style={styles.createGroupText}>Groupe</Text>
+          </Pressable>
+        </View>
+
 
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color={colors.textMuted} />
@@ -133,6 +190,7 @@ export default function ChatsScreen() {
             </Pressable>
           )}
         </View>
+
 
         {loading ? (
           <ActivityIndicator
@@ -172,14 +230,17 @@ export default function ChatsScreen() {
               </View>
             }
             renderItem={({ item }) => {
-              const name =
-                item.other_user?.display_name ||
-                item.other_user?.username ||
-                'Utilisateur';
+              const isGroup = item.type === 'group';
+              const name = isGroup
+                ? item.name || 'Groupe'
+                : item.other_user?.display_name ||
+                  item.other_user?.username ||
+                  'Utilisateur';
               const hasUnread = item.unread_count > 0;
               const time = item.last_message
                 ? formatListTime(item.last_message.created_at)
                 : '';
+
 
               return (
                 <Pressable
@@ -189,10 +250,11 @@ export default function ChatsScreen() {
                   <View style={styles.avatarWrap}>
                     <Avatar
                       name={name}
-                      uri={item.other_user?.avatar_url}
+                      uri={isGroup ? item.avatar_url : item.other_user?.avatar_url}
                       size={48}
                     />
                   </View>
+
 
                   <View style={styles.rowText}>
                     <View style={styles.rowTop}>
@@ -207,6 +269,7 @@ export default function ChatsScreen() {
                         </Text>
                       )}
                     </View>
+
 
                     <View style={styles.rowBottom}>
                       <Text
@@ -237,6 +300,8 @@ export default function ChatsScreen() {
   );
 }
 
+
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -246,12 +311,31 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    marginBottom: 14,
+  },
   title: {
     color: colors.text,
     fontSize: 26,
     fontWeight: '700',
-    marginTop: 14,
-    marginBottom: 14,
+  },
+  createGroupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.accent,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  createGroupText: {
+    color: colors.onAccent,
+    fontSize: 14,
+    fontWeight: '700',
   },
   searchBar: {
     flexDirection: 'row',

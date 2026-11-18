@@ -42,11 +42,15 @@ import {
   uploadChatImage,
 } from '@/services/media.service';
 
+
+
 import {
   addPendingTextMessage,
   getPendingTextMessagesForConversation,
   removePendingTextMessage,
 } from '@/services/offline-messages.service';
+
+
 
 import type { PreparedImage } from '@/services/media.service';
 import { isUserBlocked, unblockUser } from '@/services/block.service';
@@ -67,14 +71,9 @@ import ConversationHeader from '@/features/messages/components/ConversationHeade
 
 
 
-/**
- * Décalage du clavier : UN SEUL mécanisme, KeyboardAvoidingView.
- * Avec l'affichage bord à bord d'Expo/Android récents, le système ne redimensionne
- * plus la fenêtre : 'padding' est nécessaire sur Android comme sur iOS.
- * Si un espace vide apparaît au-dessus du clavier sur Android (la fenêtre est alors
- * déjà redimensionnée par le système), remplacer par `undefined` pour Android.
- */
+
 const KEYBOARD_BEHAVIOR: 'padding' | undefined = 'padding';
+
 
 
 
@@ -85,11 +84,12 @@ const EDIT_WINDOW_MS = EDIT_WINDOW_MINUTES * 60 * 1000;
 
 
 
+
 type ChatMessage = Message & {
   status: 'sent' | 'pending' | 'failed';
-  /** Aperçu local d'une photo en cours d'envoi (évite de la retélécharger). */
   localUri?: string;
 };
+
 
 
 
@@ -100,7 +100,7 @@ function timeOf(message: ChatMessage): number {
 
 
 
-/** Fusionne des messages dans la liste (remplace par id) et trie du plus récent au plus ancien. */
+
 function upsertMessages(
   list: ChatMessage[],
   incoming: ChatMessage[]
@@ -109,8 +109,10 @@ function upsertMessages(
 
 
 
+
   for (const message of incoming) {
     const existing = byId.get(message.id);
+
 
 
 
@@ -122,12 +124,13 @@ function upsertMessages(
 
 
 
+
   return Array.from(byId.values()).sort((a, b) => timeOf(b) - timeOf(a));
 }
 
 
 
-/** L'envoi est refusé par la base (blocage ou accès retiré). */
+
 function isPermissionError(error: unknown): boolean {
   return (
     error instanceof Error &&
@@ -137,7 +140,7 @@ function isPermissionError(error: unknown): boolean {
 
 
 
-/** Un message texte envoyé par moi, non supprimé, dans le délai de modification. */
+
 function canEditMessage(message: ChatMessage, myId: string | null): boolean {
   return (
     !!myId &&
@@ -151,9 +154,10 @@ function canEditMessage(message: ChatMessage, myId: string | null): boolean {
 
 
 
-/** Mes messages envoyés (modifier / supprimer) ou en échec (retirer). */
+
 function canActOnMessage(message: ChatMessage, myId: string | null): boolean {
   if (!myId || message.sender_id !== myId || message.deleted_at) return false;
+
 
 
 
@@ -162,7 +166,7 @@ function canActOnMessage(message: ChatMessage, myId: string | null): boolean {
 
 
 
-/** Statut d'un de mes messages envoyés, d'après les repères du correspondant. */
+
 function deliveryOf(
   message: ChatMessage,
   receipts: PeerReceipts | null
@@ -171,7 +175,9 @@ function deliveryOf(
 
 
 
+
   const created = Date.parse(message.created_at);
+
 
 
 
@@ -182,13 +188,16 @@ function deliveryOf(
 
 
 
+
   return 'sent';
 }
 
 
 
+
 function editErrorMessage(error: unknown): string {
   const text = error instanceof Error ? error.message : '';
+
 
 
 
@@ -198,9 +207,11 @@ function editErrorMessage(error: unknown): string {
 
 
 
+
   if (text.includes('forbidden')) {
     return 'Tu ne peux pas modifier ce message.';
   }
+
 
 
 
@@ -210,8 +221,10 @@ function editErrorMessage(error: unknown): string {
 
 
 
+
   return 'Impossible de modifier le message. Réessaie.';
 }
+
 
 
 
@@ -243,7 +256,7 @@ export default function ConversationScreen() {
 
 
 
-  // Réglages, présence du correspondant, saisie et reçus
+
   const { settings } = useUserSettings();
   const typingEnabled = settings?.typing_indicator_enabled ?? true;
   const { peerTyping, receipts, notifyTyping, stopTyping, announceRead } =
@@ -252,24 +265,30 @@ export default function ConversationScreen() {
 
 
 
+
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
 
 
 
-  /** Photos en attente d'envoi (conservées pour un éventuel « Réessayer »). */
+
   const pendingImages = useRef(new Map<string, PreparedImage>());
 
 
 
-  /** Marge basse : zone de sécurité quand le clavier est fermé, petite marge quand il est ouvert. */
+
   const bottomPadding = keyboardVisible ? 8 : Math.max(insets.bottom, 8) + 8;
+
+
+
+
+  const isGroup = conversation?.type === 'group';
+
 
 
 
   const markRead = useCallback(() => {
     if (!conversationId) return;
-    // Non critique : en cas d'échec, le compteur sera corrigé à la prochaine ouverture.
     markConversationRead(conversationId)
       .then(() => announceRead())
       .catch(() => undefined);
@@ -277,9 +296,10 @@ export default function ConversationScreen() {
 
 
 
-  /** Récupère les derniers messages et les fusionne (utilisé à la reconnexion). */
+
   const syncLatest = useCallback(async () => {
     if (!conversationId) return;
+
 
 
 
@@ -299,10 +319,11 @@ export default function ConversationScreen() {
 
 
 
-  /** Envoie un message (texte, ou photo : téléversement puis enregistrement). */
+
   const deliver = useCallback(
     async (message: ChatMessage) => {
       if (!conversationId) return;
+
 
 
 
@@ -311,8 +332,10 @@ export default function ConversationScreen() {
 
 
 
+
         if (message.type === 'image') {
           const image = pendingImages.current.get(message.id);
+
 
 
 
@@ -322,7 +345,9 @@ export default function ConversationScreen() {
 
 
 
+
           await uploadChatImage(message.media_path, image.base64);
+
 
 
 
@@ -334,9 +359,11 @@ export default function ConversationScreen() {
 
 
 
+
           pendingImages.current.delete(message.id);
         } else {
           if (!message.content) return;
+
 
 
 
@@ -348,8 +375,10 @@ export default function ConversationScreen() {
 
 
 
+
           await removePendingTextMessage(message.id);
         }
+
 
 
 
@@ -365,9 +394,11 @@ export default function ConversationScreen() {
 
 
 
+
           setMessages((previous) =>
             previous.filter((item) => item.id !== message.id)
           );
+
 
 
 
@@ -377,8 +408,10 @@ export default function ConversationScreen() {
 
 
 
+
           return;
         }
+
 
 
 
@@ -392,15 +425,17 @@ export default function ConversationScreen() {
 
 
 
-  /** Renvoie automatiquement les messages texte restés en attente. */
+
   const flushPendingMessages = useCallback(async () => {
     if (!conversationId) return;
+
 
 
 
     const pending = await getPendingTextMessagesForConversation(
       conversationId
     );
+
 
 
 
@@ -420,21 +455,24 @@ export default function ConversationScreen() {
 
 
 
+
       await deliver(message);
     }
   }, [conversationId, myId, deliver]);
 
 
 
-  // Chargement initial
+
   useEffect(() => {
     let active = true;
+
 
 
 
     async function load() {
       try {
         if (!conversationId) throw new Error('Conversation manquante.');
+
 
 
 
@@ -446,7 +484,9 @@ export default function ConversationScreen() {
 
 
 
+
         if (!active) return;
+
 
 
 
@@ -457,6 +497,7 @@ export default function ConversationScreen() {
 
 
 
+
         const otherId = conversationResult.other_user?.id;
         const blocked = otherId
           ? await isUserBlocked(otherId).catch(() => false)
@@ -464,7 +505,9 @@ export default function ConversationScreen() {
 
 
 
+
         if (!active) return;
+
 
 
 
@@ -485,7 +528,9 @@ export default function ConversationScreen() {
 
 
 
+
     load();
+
 
 
 
@@ -496,9 +541,10 @@ export default function ConversationScreen() {
 
 
 
-  // Temps réel : nouveaux messages, modifications et suppressions
+
   useEffect(() => {
     if (!conversationId) return;
+
 
 
 
@@ -520,8 +566,7 @@ export default function ConversationScreen() {
 
 
 
-        // (Re)connexion : on récupère les messages éventuellement manqués
-        // et on renvoie les messages texte restés en attente.
+
         if (isConnected) {
           void syncLatest();
           void flushPendingMessages();
@@ -531,12 +576,13 @@ export default function ConversationScreen() {
 
 
 
+
     return unsubscribe;
   }, [conversationId, markRead, syncLatest, flushPendingMessages]);
 
 
 
-  // Retour au premier plan : resynchronisation et renvoi des messages en attente
+
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
@@ -547,13 +593,16 @@ export default function ConversationScreen() {
 
 
 
+
     return () => subscription.remove();
   }, [syncLatest, flushPendingMessages]);
 
 
 
+
   async function loadOlder() {
     if (!conversationId || loadingMore || !hasMore) return;
+
 
 
 
@@ -563,7 +612,9 @@ export default function ConversationScreen() {
 
 
 
+
     if (!oldestSent) return;
+
 
 
 
@@ -571,8 +622,10 @@ export default function ConversationScreen() {
 
 
 
+
     try {
       const page = await getMessages(conversationId, oldestSent.created_at);
+
 
 
 
@@ -592,13 +645,15 @@ export default function ConversationScreen() {
 
 
 
-  /** Saisie : met à jour le champ et prévient le correspondant que j'écris. */
+
   function handleChangeText(value: string) {
     setInput(value);
 
 
 
+
     if (editing) return;
+
 
 
 
@@ -611,13 +666,16 @@ export default function ConversationScreen() {
 
 
 
+
   async function handleSend() {
     const content = input.trim();
 
 
 
+
     if (!content || !conversationId || !myId) return;
     if (content.length > MESSAGE_MAX_LENGTH) return;
+
 
 
 
@@ -636,6 +694,7 @@ export default function ConversationScreen() {
 
 
 
+
     stopTyping();
     setNotice('');
     setMessages((previous) => upsertMessages(previous, [optimistic]));
@@ -644,8 +703,7 @@ export default function ConversationScreen() {
 
 
 
-    // Le message est conservé localement avant l'envoi :
-    // il pourra être renvoyé automatiquement après une coupure réseau.
+
     await addPendingTextMessage({
       id: optimistic.id,
       conversationId,
@@ -655,8 +713,10 @@ export default function ConversationScreen() {
 
 
 
+
     void deliver(optimistic);
   }
+
 
 
 
@@ -665,9 +725,11 @@ export default function ConversationScreen() {
 
 
 
+
     try {
       const image =
         source === 'camera' ? await takePhoto() : await pickImageFromLibrary();
+
 
 
 
@@ -681,12 +743,15 @@ export default function ConversationScreen() {
 
 
 
+
   function handleSendPhoto() {
     if (!draftImage || !conversationId || !myId) return;
 
 
 
+
     const id = generateId();
+
 
 
 
@@ -706,7 +771,9 @@ export default function ConversationScreen() {
 
 
 
+
     pendingImages.current.set(id, draftImage);
+
 
 
 
@@ -719,8 +786,10 @@ export default function ConversationScreen() {
 
 
 
+
   function handleRetry(message: ChatMessage) {
     const pending: ChatMessage = { ...message, status: 'pending' };
+
 
 
 
@@ -731,12 +800,10 @@ export default function ConversationScreen() {
 
 
 
-  // --- Modifier / supprimer -------------------------------------------------
-
-
 
   function startEdit() {
     const target = actionsTarget;
+
 
 
 
@@ -744,7 +811,9 @@ export default function ConversationScreen() {
 
 
 
+
     if (!target || !canEditMessage(target, myId)) return;
+
 
 
 
@@ -757,6 +826,7 @@ export default function ConversationScreen() {
 
 
 
+
   function cancelEdit() {
     setEditing(null);
     setInput('');
@@ -765,8 +835,10 @@ export default function ConversationScreen() {
 
 
 
+
   async function handleSaveEdit() {
     if (!editing || savingEdit) return;
+
 
 
 
@@ -774,7 +846,9 @@ export default function ConversationScreen() {
 
 
 
+
     if (!content) return;
+
 
 
 
@@ -785,13 +859,16 @@ export default function ConversationScreen() {
 
 
 
+
     setSavingEdit(true);
     setNotice('');
 
 
 
+
     try {
       const saved = await editMessage({ id: editing.id, content });
+
 
 
 
@@ -808,12 +885,13 @@ export default function ConversationScreen() {
 
 
 
+
   async function handleDelete(message: ChatMessage) {
     setNotice('');
 
 
 
-    // Message jamais parti : on le retire simplement de l'écran et de la file locale.
+
     if (message.status === 'failed') {
       pendingImages.current.delete(message.id);
       await removePendingTextMessage(message.id);
@@ -825,8 +903,10 @@ export default function ConversationScreen() {
 
 
 
+
     try {
       const saved = await deleteMessage(message.id);
+
 
 
 
@@ -836,12 +916,13 @@ export default function ConversationScreen() {
 
 
 
+
       if (editing?.id === message.id) cancelEdit();
 
 
 
+
       if (message.type === 'image' && message.media_path) {
-        // Nettoyage du fichier : sans gravité en cas d'échec, la trace est déjà posée.
         void removeChatImage(message.media_path).catch(() => undefined);
       }
     } catch {
@@ -851,12 +932,15 @@ export default function ConversationScreen() {
 
 
 
+
   function confirmDelete() {
     const target = actionsTarget;
 
 
 
+
     setActionsTarget(null);
+
 
 
 
@@ -865,12 +949,15 @@ export default function ConversationScreen() {
 
 
 
+
   async function handleUnblock() {
     const otherId = conversation?.other_user?.id;
 
 
 
+
     if (!otherId) return;
+
 
 
 
@@ -885,14 +972,25 @@ export default function ConversationScreen() {
 
 
 
-  const name =
-    conversation?.other_user?.display_name ||
-    conversation?.other_user?.username ||
-    'Conversation';
+
+  const name = isGroup
+    ? conversation?.name || 'Groupe'
+    : conversation?.other_user?.display_name ||
+      conversation?.other_user?.username ||
+      'Conversation';
+
+
+
+
+  const headerAvatarUrl = isGroup
+    ? conversation?.avatar_url ?? null
+    : conversation?.other_user?.avatar_url ?? null;
+
 
 
 
   const canSend = input.trim().length > 0 && !!myId && !savingEdit;
+
 
 
 
@@ -909,6 +1007,7 @@ export default function ConversationScreen() {
 
 
 
+
     return (
       <View style={[styles.row, mine ? styles.rowMine : styles.rowTheirs]}>
         <View style={[styles.line, mine ? styles.lineMine : styles.lineTheirs]}>
@@ -922,6 +1021,7 @@ export default function ConversationScreen() {
               <Ionicons name="ellipsis-horizontal" size={16} color="#8493A8" />
             </Pressable>
           )}
+
 
 
 
@@ -970,12 +1070,14 @@ export default function ConversationScreen() {
               </Text>
             )}
 
+
             <View style={[styles.metaRow, isImage && !deleted && styles.metaImage]}>
               <Text style={mine ? styles.metaMineText : styles.metaTheirsText}>
                 {item.edited_at && !deleted ? 'modifié · ' : ''}
                 {formatMessageTime(item.created_at)}
                 {mine && item.status === 'pending' ? ' · Envoi…' : ''}
               </Text>
+
 
               {delivery && (
                 <Ionicons
@@ -988,6 +1090,7 @@ export default function ConversationScreen() {
           </Pressable>
         </View>
 
+
         {mine && item.status === 'failed' && (
           <Pressable onPress={() => handleRetry(item)} hitSlop={8}>
             <Text style={styles.failed}>Échec de l'envoi · Réessayer</Text>
@@ -997,30 +1100,40 @@ export default function ConversationScreen() {
     );
   }
 
+
+
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
+
       <ConversationHeader
         onBack={() => router.back()}
         name={name}
-        avatarUrl={conversation?.other_user?.avatar_url ?? null}
+        avatarUrl={headerAvatarUrl}
         showInfo={!!conversation}
       >
-        <PresenceLabel
-          typing={peerTyping}
-          presence={presence}
-          fallback={
-            conversation?.other_user?.username
-              ? `@${conversation.other_user.username}`
-              : undefined
-          }
-        />
+        {isGroup ? (
+          <Text style={styles.groupSubtitle}>Groupe</Text>
+        ) : (
+          <PresenceLabel
+            typing={peerTyping}
+            presence={presence}
+            fallback={
+              conversation?.other_user?.username
+                ? `@${conversation.other_user.username}`
+                : undefined
+            }
+          />
+        )}
       </ConversationHeader>
+
 
       {!connected && !loading && !error && (
         <Text style={styles.banner}>Connexion en cours…</Text>
       )}
+
 
       {loading ? (
         <ActivityIndicator color="#FF8A32" size="large" style={styles.loader} />
@@ -1036,9 +1149,11 @@ export default function ConversationScreen() {
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>Aucun message pour le moment</Text>
               <Text style={styles.emptyText}>
-                {blockedByMe
-                  ? 'Tu as bloqué cet utilisateur.'
-                  : `Écris le premier message à ${name}.`}
+                {isGroup
+                  ? 'Écris le premier message dans ce groupe.'
+                  : blockedByMe
+                    ? 'Tu as bloqué cet utilisateur.'
+                    : `Écris le premier message à ${name}.`}
               </Text>
             </View>
           ) : (
@@ -1064,9 +1179,11 @@ export default function ConversationScreen() {
             />
           )}
 
+
           {!!notice && <Text style={styles.notice}>{notice}</Text>}
 
-          {blockedByMe ? (
+
+          {!isGroup && blockedByMe ? (
             <View style={[styles.blockedBar, { paddingBottom: bottomPadding + 6 }]}>
               <Text style={styles.blockedText}>
                 Tu as bloqué cet utilisateur.
@@ -1080,12 +1197,14 @@ export default function ConversationScreen() {
               <Image source={{ uri: draftImage.uri }} style={styles.draftThumb} />
               <Text style={styles.draftText}>Photo prête à envoyer</Text>
 
+
               <Pressable
                 style={[styles.draftButton, styles.draftCancel]}
                 onPress={() => setDraftImage(null)}
               >
                 <Text style={styles.draftCancelText}>Annuler</Text>
               </Pressable>
+
 
               <Pressable
                 style={[styles.draftButton, styles.draftSend]}
@@ -1116,6 +1235,7 @@ export default function ConversationScreen() {
                 </View>
               )}
 
+
               <View style={[styles.inputBar, { paddingBottom: bottomPadding }]}>
                 <View style={styles.inputPill}>
                   <TextInput
@@ -1132,6 +1252,7 @@ export default function ConversationScreen() {
                     onContentSizeChange={(event) => {
                       const contentHeight = event.nativeEvent.contentSize.height;
 
+
                       setInputHeight(
                         Math.min(
                           MAX_INPUT_HEIGHT,
@@ -1144,6 +1265,7 @@ export default function ConversationScreen() {
                     }}
                   />
 
+
                   {!editing && (
                     <>
                       <Pressable
@@ -1154,6 +1276,7 @@ export default function ConversationScreen() {
                       >
                         <Ionicons name="image-outline" size={22} color="#A8B6C8" />
                       </Pressable>
+
 
                       {Platform.OS !== 'web' && (
                         <Pressable
@@ -1172,6 +1295,7 @@ export default function ConversationScreen() {
                     </>
                   )}
                 </View>
+
 
                 <Pressable
                   style={[styles.sendButton, !canSend && styles.sendDisabled]}
@@ -1197,7 +1321,9 @@ export default function ConversationScreen() {
         </KeyboardAvoidingView>
       )}
 
+
       <ImageViewerModal target={viewer} onClose={() => setViewer(null)} />
+
 
       <MessageActionsModal
         target={
@@ -1223,6 +1349,7 @@ export default function ConversationScreen() {
 
 
 
+
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
@@ -1231,25 +1358,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#081426',
   },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#10223A',
-  },
-  back: {
-    color: '#FF8A32',
-    fontSize: 16,
-    marginBottom: 14,
-  },
-  headerInfo: {
-    marginTop: 2,
-  },
-  headerName: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
+  groupSubtitle: {
+    color: '#A8B6C8',
+    fontSize: 13,
   },
   banner: {
     backgroundColor: '#10223A',
