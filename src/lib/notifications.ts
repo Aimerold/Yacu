@@ -291,8 +291,7 @@ export function addNotificationListeners(
   const receivedSubscription =
     Notifications.addNotificationReceivedListener(onReceived);
 
-
-
+    
   const responseSubscription =
     Notifications.addNotificationResponseReceivedListener(onResponse);
 
