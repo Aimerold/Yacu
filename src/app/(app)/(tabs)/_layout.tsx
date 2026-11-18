@@ -5,6 +5,7 @@ import { useFriendships } from '@/features/contacts/hooks/useFriendships';
 import { usePushNotifications } from '@/features/notifications/hooks/usePushNotifications';
 import { colors } from '@/theme/tokens';
 
+
 export default function TabsLayout() {
   // Battement de cœur de présence + marquage « reçu », pour toute la zone connectée
   useAppPresence();
@@ -53,21 +54,6 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'people' : 'people-outline'}
-              size={size}
-              color={color as string}
-            />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="Services"
-        options={{
-          title: 'Services',
-          tabBarLabel: 'Jobs',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'briefcase' : 'briefcase-outline'}
               size={size}
               color={color as string}
             />
