@@ -15,11 +15,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+
 import {
   getConversationById,
   getCurrentUserId,
 } from '@/services/conversation.service';
 import type { ConversationSummary } from '@/services/conversation.service';
+
 import {
   EDIT_WINDOW_MINUTES,
   MESSAGE_MAX_LENGTH,
@@ -33,6 +35,7 @@ import {
   subscribeToConversationMessages,
 } from '@/services/message.service';
 import type { Message } from '@/services/message.service';
+
 import {
   MediaError,
   buildChatImagePath,
@@ -41,14 +44,19 @@ import {
   takePhoto,
   uploadChatImage,
 } from '@/services/media.service';
+import type { PreparedImage } from '@/services/media.service';
+
 import {
   addPendingTextMessage,
   getPendingTextMessagesForConversation,
   removePendingTextMessage,
 } from '@/services/offline-messages.service';
-import type { PreparedImage } from '@/services/media.service';
+
 import { isUserBlocked, unblockUser } from '@/services/block.service';
 import type { PeerReceipts } from '@/services/receipt.service';
+
+import { startAudioCall } from '@/services/call.service';
+
 import ImageMessage from '@/features/messages/components/ImageMessage';
 import ImageViewerModal from '@/features/messages/components/ImageViewerModal';
 import type { ViewerTarget } from '@/features/messages/components/ImageViewerModal';
@@ -63,45 +71,33 @@ import { generateId } from '@/utils/id';
 import { formatMessageTime } from '@/utils/format';
 import ConversationHeader from '@/features/messages/components/ConversationHeader';
 
-
-
 const KEYBOARD_BEHAVIOR: 'padding' | undefined = 'padding';
-
-
 
 const MIN_INPUT_HEIGHT = 44;
 const MAX_INPUT_HEIGHT = 132;
 const INPUT_VERTICAL_PADDING = 20;
 const EDIT_WINDOW_MS = EDIT_WINDOW_MINUTES * 60 * 1000;
 
-
-
 type ChatMessage = Message & {
   status: 'sent' | 'pending' | 'failed';
   localUri?: string;
 };
-
-
 
 function timeOf(message: ChatMessage): number {
   const value = Date.parse(message.created_at);
   return Number.isNaN(value) ? 0 : value;
 }
 
-
-
 function upsertMessages(
   list: ChatMessage[],
   incoming: ChatMessage[]
 ): ChatMessage[] {
-  const byId = new Map(list.map((message) => [message.id, message]));
-
-
+  const byId = new Map(
+    list.map((message) => [message.id, message])
+  );
 
   for (const message of incoming) {
     const existing = byId.get(message.id);
-
-
 
     byId.set(message.id, {
       ...message,
@@ -109,12 +105,10 @@ function upsertMessages(
     });
   }
 
-
-
-  return Array.from(byId.values()).sort((a, b) => timeOf(b) - timeOf(a));
+  return Array.from(byId.values()).sort(
+    (a, b) => timeOf(b) - timeOf(a)
+  );
 }
-
-
 
 function isPermissionError(error: unknown): boolean {
   return (
@@ -123,30 +117,31 @@ function isPermissionError(error: unknown): boolean {
   );
 }
 
-
-
-function canEditMessage(message: ChatMessage, myId: string | null): boolean {
+function canEditMessage(
+  message: ChatMessage,
+  myId: string | null
+): boolean {
   return (
     !!myId &&
     message.sender_id === myId &&
     message.type === 'text' &&
     message.status === 'sent' &&
     !message.deleted_at &&
-    Date.now() - Date.parse(message.created_at) <= EDIT_WINDOW_MS
+    Date.now() - Date.parse(message.created_at) <=
+      EDIT_WINDOW_MS
   );
 }
 
-
-
-function canActOnMessage(message: ChatMessage, myId: string | null): boolean {
-  if (!myId || message.sender_id !== myId || message.deleted_at) return false;
-
-
+function canActOnMessage(
+  message: ChatMessage,
+  myId: string | null
+): boolean {
+  if (!myId || message.sender_id !== myId || message.deleted_at) {
+    return false;
+  }
 
   return message.status === 'sent' || message.status === 'failed';
 }
-
-
 
 function deliveryOf(
   message: ChatMessage,
@@ -154,51 +149,39 @@ function deliveryOf(
 ): 'sent' | 'delivered' | 'read' {
   if (!receipts) return 'sent';
 
-
-
   const created = Date.parse(message.created_at);
 
-
-
-  if (receipts.readAt !== null && receipts.readAt >= created) return 'read';
-  if (receipts.deliveredAt !== null && receipts.deliveredAt >= created) {
-    return 'delivered';
+  if (receipts.readAt !== null && receipts.readAt >= created) {
+    return 'read';
   }
 
-
+  if (
+    receipts.deliveredAt !== null &&
+    receipts.deliveredAt >= created
+  ) {
+    return 'delivered';
+  }
 
   return 'sent';
 }
 
-
-
 function editErrorMessage(error: unknown): string {
   const text = error instanceof Error ? error.message : '';
-
-
 
   if (text.includes('edit_window_expired')) {
     return `Le délai de modification (${EDIT_WINDOW_MINUTES} minutes) est dépassé.`;
   }
 
-
-
   if (text.includes('forbidden')) {
     return 'Tu ne peux pas modifier ce message.';
   }
-
-
 
   if (text.includes('not_editable')) {
     return 'Ce message ne peut plus être modifié.';
   }
 
-
-
   return 'Impossible de modifier le message. Réessaie.';
 }
-
-
 
 export default function ConversationScreen() {
   const router = useRouter();
@@ -208,23 +191,28 @@ export default function ConversationScreen() {
     conversationId: string;
   }>();
 
-
-
   useActiveConversation(conversationId);
-
-
 
   const [conversation, setConversation] =
     useState<ConversationSummary | null>(null);
   const [myId, setMyId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
-  const [draftImage, setDraftImage] = useState<PreparedImage | null>(null);
-  const [editing, setEditing] = useState<ChatMessage | null>(null);
+  const [inputHeight, setInputHeight] = useState(
+    MIN_INPUT_HEIGHT
+  );
+  const [draftImage, setDraftImage] =
+    useState<PreparedImage | null>(null);
+  const [editing, setEditing] = useState<ChatMessage | null>(
+    null
+  );
   const [savingEdit, setSavingEdit] = useState(false);
-  const [actionsTarget, setActionsTarget] = useState<ChatMessage | null>(null);
-  const [viewer, setViewer] = useState<ViewerTarget | null>(null);
+  const [startingCall, setStartingCall] = useState(false);
+  const [actionsTarget, setActionsTarget] =
+    useState<ChatMessage | null>(null);
+  const [viewer, setViewer] = useState<ViewerTarget | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -233,103 +221,88 @@ export default function ConversationScreen() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
-
-
   const { settings } = useUserSettings();
-  const typingEnabled = settings?.typing_indicator_enabled ?? true;
+  const typingEnabled =
+    settings?.typing_indicator_enabled ?? true;
 
-
-
-  const { peerTyping, receipts, notifyTyping, stopTyping, announceRead } =
-    useConversationLive({ conversationId, typingEnabled });
-
-
+  const {
+    peerTyping,
+    receipts,
+    notifyTyping,
+    stopTyping,
+    announceRead,
+  } = useConversationLive({
+    conversationId,
+    typingEnabled,
+  });
 
   const isGroup = conversation?.type === 'group';
+
   const presence = useContactPresence(
     isGroup ? undefined : conversation?.other_user?.id
   );
 
-
-
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
 
-
-
-  const pendingImages = useRef(new Map<string, PreparedImage>());
-
-
+  const pendingImages = useRef(
+    new Map<string, PreparedImage>()
+  );
 
   const bottomPadding = keyboardVisible
     ? 8
     : Math.max(insets.bottom, 8) + 8;
 
-
-
   const markRead = useCallback(() => {
     if (!conversationId) return;
-
 
     markConversationRead(conversationId)
       .then(() => announceRead())
       .catch(() => undefined);
   }, [conversationId, announceRead]);
 
-
-
   const syncLatest = useCallback(async () => {
     if (!conversationId) return;
-
-
 
     try {
       const latest = await getMessages(conversationId);
 
-
-
       setMessages((previous) =>
         upsertMessages(
           previous,
-          latest.map((message) => ({ ...message, status: 'sent' as const }))
+          latest.map((message) => ({
+            ...message,
+            status: 'sent' as const,
+          }))
         )
       );
 
-
-
       markRead();
     } catch {
-      // Réseau coupé : une nouvelle synchronisation aura lieu à la reconnexion.
+      // Réseau coupé : nouvelle synchronisation à la reconnexion.
     }
   }, [conversationId, markRead]);
-
-
 
   const deliver = useCallback(
     async (message: ChatMessage) => {
       if (!conversationId) return;
 
-
-
       try {
         let saved: Message;
 
-
-
         if (message.type === 'image') {
-          const image = pendingImages.current.get(message.id);
-
-
+          const image = pendingImages.current.get(
+            message.id
+          );
 
           if (!image || !message.media_path) {
             throw new Error('Photo indisponible.');
           }
 
-
-
-          await uploadChatImage(message.media_path, image.base64);
-
-
+          await uploadChatImage(
+            message.media_path,
+            image.base64
+          );
 
           saved = await sendImageMessage({
             id: message.id,
@@ -337,13 +310,9 @@ export default function ConversationScreen() {
             mediaPath: message.media_path,
           });
 
-
-
           pendingImages.current.delete(message.id);
         } else {
           if (!message.content) return;
-
-
 
           saved = await sendTextMessage({
             id: message.id,
@@ -351,16 +320,16 @@ export default function ConversationScreen() {
             content: message.content,
           });
 
-
-
           await removePendingTextMessage(message.id);
         }
 
-
-
         setMessages((previous) =>
           upsertMessages(previous, [
-            { ...saved, status: 'sent', localUri: message.localUri },
+            {
+              ...saved,
+              status: 'sent',
+              localUri: message.localUri,
+            },
           ])
         );
       } catch (e) {
@@ -368,45 +337,36 @@ export default function ConversationScreen() {
           pendingImages.current.delete(message.id);
           await removePendingTextMessage(message.id);
 
-
-
           setMessages((previous) =>
-            previous.filter((item) => item.id !== message.id)
+            previous.filter(
+              (item) => item.id !== message.id
+            )
           );
-
-
 
           setNotice(
             'Tu ne peux pas envoyer de message dans cette conversation.'
           );
 
-
-
           return;
         }
 
-
-
         setMessages((previous) =>
-          upsertMessages(previous, [{ ...message, status: 'failed' }])
+          upsertMessages(previous, [
+            { ...message, status: 'failed' },
+          ])
         );
       }
     },
     [conversationId]
   );
 
-
-
   const flushPendingMessages = useCallback(async () => {
     if (!conversationId) return;
 
-
-
-    const pending = await getPendingTextMessagesForConversation(
-      conversationId
-    );
-
-
+    const pending =
+      await getPendingTextMessagesForConversation(
+        conversationId
+      );
 
     for (const item of pending) {
       const message: ChatMessage = {
@@ -422,201 +382,178 @@ export default function ConversationScreen() {
         status: 'pending',
       };
 
-
-
       await deliver(message);
     }
   }, [conversationId, myId, deliver]);
 
-
-
   useEffect(() => {
     let active = true;
 
-
-
     async function load() {
       try {
-        if (!conversationId) throw new Error('Conversation manquante.');
+        if (!conversationId) {
+          throw new Error('Conversation manquante.');
+        }
 
-
-
-        const [conversationResult, userId, firstPage] = await Promise.all([
+        const [
+          conversationResult,
+          userId,
+          firstPage,
+        ] = await Promise.all([
           getConversationById(conversationId),
           getCurrentUserId(),
           getMessages(conversationId),
         ]);
 
-
-
         if (!active) return;
 
-
-
         if (!conversationResult) {
-          setError('Conversation introuvable ou accès refusé.');
+          setError(
+            'Conversation introuvable ou accès refusé.'
+          );
           return;
         }
 
+        const otherId =
+          conversationResult.other_user?.id;
 
-
-        const otherId = conversationResult.other_user?.id;
         const blocked = otherId
-          ? await isUserBlocked(otherId).catch(() => false)
+          ? await isUserBlocked(otherId).catch(
+              () => false
+            )
           : false;
 
-
-
         if (!active) return;
-
-
 
         setConversation(conversationResult);
         setMyId(userId);
         setBlockedByMe(blocked);
 
-
-
         setMessages(
-          firstPage.map((message) => ({ ...message, status: 'sent' as const }))
+          firstPage.map((message) => ({
+            ...message,
+            status: 'sent' as const,
+          }))
         );
 
+        setHasMore(
+          firstPage.length === MESSAGE_PAGE_SIZE
+        );
 
-
-        setHasMore(firstPage.length === MESSAGE_PAGE_SIZE);
         markRead();
       } catch {
-        if (active) setError('Impossible de charger cette conversation.');
+        if (active) {
+          setError(
+            'Impossible de charger cette conversation.'
+          );
+        }
       } finally {
         if (active) setLoading(false);
       }
     }
 
-
-
-    load();
-
-
+    void load();
 
     return () => {
       active = false;
     };
   }, [conversationId, markRead]);
 
-
-
   useEffect(() => {
     if (!conversationId) return;
 
+    const unsubscribe =
+      subscribeToConversationMessages(conversationId, {
+        onInsert: (message) => {
+          setMessages((previous) =>
+            upsertMessages(previous, [
+              { ...message, status: 'sent' },
+            ])
+          );
 
+          markRead();
+        },
+        onUpdate: (message) => {
+          setMessages((previous) =>
+            upsertMessages(previous, [
+              { ...message, status: 'sent' },
+            ])
+          );
+        },
+        onStatus: (status) => {
+          const isConnected = status === 'SUBSCRIBED';
+          setConnected(isConnected);
 
-    const unsubscribe = subscribeToConversationMessages(conversationId, {
-      onInsert: (message) => {
-        setMessages((previous) =>
-          upsertMessages(previous, [{ ...message, status: 'sent' }])
-        );
+          if (isConnected) {
+            void syncLatest();
+            void flushPendingMessages();
+          }
+        },
+      });
 
+    return unsubscribe;
+  }, [
+    conversationId,
+    markRead,
+    syncLatest,
+    flushPendingMessages,
+  ]);
 
-
-        markRead();
-      },
-
-
-
-      onUpdate: (message) => {
-        setMessages((previous) =>
-          upsertMessages(previous, [{ ...message, status: 'sent' }])
-        );
-      },
-
-
-
-      onStatus: (status) => {
-        const isConnected = status === 'SUBSCRIBED';
-        setConnected(isConnected);
-
-
-
-        if (isConnected) {
+  useEffect(() => {
+    const subscription = AppState.addEventListener(
+      'change',
+      (state) => {
+        if (state === 'active') {
           void syncLatest();
           void flushPendingMessages();
         }
-      },
-    });
-
-
-
-    return unsubscribe;
-  }, [conversationId, markRead, syncLatest, flushPendingMessages]);
-
-
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        void syncLatest();
-        void flushPendingMessages();
       }
-    });
-
-
+    );
 
     return () => subscription.remove();
   }, [syncLatest, flushPendingMessages]);
 
-
-
   async function loadOlder() {
-    if (!conversationId || loadingMore || !hasMore) return;
-
-
+    if (!conversationId || loadingMore || !hasMore) {
+      return;
+    }
 
     const oldestSent = [...messagesRef.current]
       .reverse()
       .find((message) => message.status === 'sent');
 
-
-
     if (!oldestSent) return;
-
-
 
     setLoadingMore(true);
 
-
-
     try {
-      const page = await getMessages(conversationId, oldestSent.created_at);
-
-
+      const page = await getMessages(
+        conversationId,
+        oldestSent.created_at
+      );
 
       setMessages((previous) =>
         upsertMessages(
           previous,
-          page.map((message) => ({ ...message, status: 'sent' as const }))
+          page.map((message) => ({
+            ...message,
+            status: 'sent' as const,
+          }))
         )
       );
 
-
-
       setHasMore(page.length === MESSAGE_PAGE_SIZE);
     } catch {
-      // On pourra réessayer en remontant à nouveau dans la liste.
+      // On pourra réessayer en remontant dans la liste.
     } finally {
       setLoadingMore(false);
     }
   }
 
-
-
   function handleChangeText(value: string) {
     setInput(value);
 
-
-
     if (editing) return;
-
-
 
     if (value.trim().length > 0) {
       notifyTyping();
@@ -625,17 +562,11 @@ export default function ConversationScreen() {
     }
   }
 
-
-
   async function handleSend() {
     const content = input.trim();
 
-
-
     if (!content || !conversationId || !myId) return;
     if (content.length > MESSAGE_MAX_LENGTH) return;
-
-
 
     const optimistic: ChatMessage = {
       id: generateId(),
@@ -650,15 +581,13 @@ export default function ConversationScreen() {
       status: 'pending',
     };
 
-
-
     stopTyping();
     setNotice('');
-    setMessages((previous) => upsertMessages(previous, [optimistic]));
+    setMessages((previous) =>
+      upsertMessages(previous, [optimistic])
+    );
     setInput('');
     setInputHeight(MIN_INPUT_HEIGHT);
-
-
 
     await addPendingTextMessage({
       id: optimistic.id,
@@ -667,42 +596,34 @@ export default function ConversationScreen() {
       createdAt: optimistic.created_at,
     });
 
-
-
     void deliver(optimistic);
   }
 
-
-
-  async function handlePickPhoto(source: 'library' | 'camera') {
+  async function handlePickPhoto(
+    source: 'library' | 'camera'
+  ) {
     setNotice('');
-
-
 
     try {
       const image =
-        source === 'camera' ? await takePhoto() : await pickImageFromLibrary();
-
-
+        source === 'camera'
+          ? await takePhoto()
+          : await pickImageFromLibrary();
 
       if (image) setDraftImage(image);
     } catch (e) {
       setNotice(
-        e instanceof MediaError ? e.message : "Impossible d'ajouter la photo."
+        e instanceof MediaError
+          ? e.message
+          : "Impossible d'ajouter la photo."
       );
     }
   }
 
-
-
   function handleSendPhoto() {
     if (!draftImage || !conversationId || !myId) return;
 
-
-
     const id = generateId();
-
-
 
     const optimistic: ChatMessage = {
       id,
@@ -710,7 +631,11 @@ export default function ConversationScreen() {
       sender_id: myId,
       type: 'image',
       content: null,
-      media_path: buildChatImagePath(conversationId, myId, id),
+      media_path: buildChatImagePath(
+        conversationId,
+        myId,
+        id
+      ),
       created_at: new Date().toISOString(),
       edited_at: null,
       deleted_at: null,
@@ -718,51 +643,40 @@ export default function ConversationScreen() {
       localUri: draftImage.uri,
     };
 
-
-
     pendingImages.current.set(id, draftImage);
-
-
 
     stopTyping();
     setNotice('');
-    setMessages((previous) => upsertMessages(previous, [optimistic]));
+    setMessages((previous) =>
+      upsertMessages(previous, [optimistic])
+    );
     setDraftImage(null);
-
-
 
     void deliver(optimistic);
   }
 
-
-
   function handleRetry(message: ChatMessage) {
-    const pending: ChatMessage = { ...message, status: 'pending' };
-
-
+    const pending: ChatMessage = {
+      ...message,
+      status: 'pending',
+    };
 
     setNotice('');
-    setMessages((previous) => upsertMessages(previous, [pending]));
-
-
+    setMessages((previous) =>
+      upsertMessages(previous, [pending])
+    );
 
     void deliver(pending);
   }
 
-
-
   function startEdit() {
     const target = actionsTarget;
 
-
-
     setActionsTarget(null);
 
-
-
-    if (!target || !canEditMessage(target, myId)) return;
-
-
+    if (!target || !canEditMessage(target, myId)) {
+      return;
+    }
 
     stopTyping();
     setNotice('');
@@ -771,51 +685,38 @@ export default function ConversationScreen() {
     setInput(target.content ?? '');
   }
 
-
-
   function cancelEdit() {
     setEditing(null);
     setInput('');
     setInputHeight(MIN_INPUT_HEIGHT);
   }
 
-
-
   async function handleSaveEdit() {
     if (!editing || savingEdit) return;
 
-
-
     const content = input.trim();
 
-
-
     if (!content) return;
-
-
 
     if (content === (editing.content ?? '')) {
       cancelEdit();
       return;
     }
 
-
-
     setSavingEdit(true);
     setNotice('');
 
-
-
     try {
-      const saved = await editMessage({ id: editing.id, content });
-
-
+      const saved = await editMessage({
+        id: editing.id,
+        content,
+      });
 
       setMessages((previous) =>
-        upsertMessages(previous, [{ ...saved, status: 'sent' }])
+        upsertMessages(previous, [
+          { ...saved, status: 'sent' },
+        ])
       );
-
-
 
       cancelEdit();
     } catch (e) {
@@ -825,88 +726,109 @@ export default function ConversationScreen() {
     }
   }
 
-
-
   async function handleDelete(message: ChatMessage) {
     setNotice('');
-
-
 
     if (message.status === 'failed') {
       pendingImages.current.delete(message.id);
       await removePendingTextMessage(message.id);
 
-
-
       setMessages((previous) =>
-        previous.filter((item) => item.id !== message.id)
+        previous.filter(
+          (item) => item.id !== message.id
+        )
       );
-
-
 
       return;
     }
 
-
-
     try {
       const saved = await deleteMessage(message.id);
 
-
-
       setMessages((previous) =>
-        upsertMessages(previous, [{ ...saved, status: 'sent' }])
+        upsertMessages(previous, [
+          { ...saved, status: 'sent' },
+        ])
       );
-
-
 
       if (editing?.id === message.id) cancelEdit();
 
-
-
-      if (message.type === 'image' && message.media_path) {
-        void removeChatImage(message.media_path).catch(() => undefined);
+      if (
+        message.type === 'image' &&
+        message.media_path
+      ) {
+        void removeChatImage(
+          message.media_path
+        ).catch(() => undefined);
       }
     } catch {
-      setNotice('Impossible de supprimer le message. Réessaie.');
+      setNotice(
+        'Impossible de supprimer le message. Réessaie.'
+      );
     }
   }
-
-
 
   function confirmDelete() {
     const target = actionsTarget;
 
-
-
     setActionsTarget(null);
-
-
 
     if (target) void handleDelete(target);
   }
 
-
-
   async function handleUnblock() {
     const otherId = conversation?.other_user?.id;
 
-
-
     if (!otherId) return;
-
-
 
     try {
       await unblockUser(otherId);
       setBlockedByMe(false);
       setNotice('');
     } catch {
-      setNotice('Impossible de débloquer cet utilisateur. Réessaie.');
+      setNotice(
+        'Impossible de débloquer cet utilisateur. Réessaie.'
+      );
     }
   }
 
+  async function handleStartAudioCall() {
+    if (
+      !conversationId ||
+      !conversation ||
+      isGroup ||
+      !conversation.other_user ||
+      startingCall
+    ) {
+      return;
+    }
 
+    try {
+      setStartingCall(true);
+
+      const call = await startAudioCall(
+        conversationId,
+        conversation.other_user.id
+      );
+
+      router.push({
+        pathname: '/call/[callId]',
+        params: {
+          callId: call.id,
+          conversationId,
+        },
+      });
+    } catch (e) {
+      const message =
+        e instanceof Error
+          ? e.message
+          : "Impossible de démarrer l'appel.";
+
+      setNotice(message);
+    } finally {
+      setStartingCall(false);
+    }
+  }
 
   const name = isGroup
     ? conversation?.name || 'Groupe'
@@ -914,34 +836,41 @@ export default function ConversationScreen() {
       conversation?.other_user?.username ||
       'Conversation';
 
-
-
   const headerAvatarUrl = isGroup
     ? conversation?.avatar_url ?? null
     : conversation?.other_user?.avatar_url ?? null;
 
-
-
-  const canSend = input.trim().length > 0 && !!myId && !savingEdit;
-
-
+  const canSend =
+    input.trim().length > 0 && !!myId && !savingEdit;
 
   function renderMessage({ item }: { item: ChatMessage }) {
     const mine = item.sender_id === myId;
     const isImage = item.type === 'image';
     const deleted = !!item.deleted_at;
     const actionable = canActOnMessage(item, myId);
-    const openActions = actionable ? () => setActionsTarget(item) : undefined;
+
+    const openActions = actionable
+      ? () => setActionsTarget(item)
+      : undefined;
+
     const delivery =
       mine && item.status === 'sent' && !deleted
         ? deliveryOf(item, receipts)
         : null;
 
-
-
     return (
-      <View style={[styles.row, mine ? styles.rowMine : styles.rowTheirs]}>
-        <View style={[styles.line, mine ? styles.lineMine : styles.lineTheirs]}>
+      <View
+        style={[
+          styles.row,
+          mine ? styles.rowMine : styles.rowTheirs,
+        ]}
+      >
+        <View
+          style={[
+            styles.line,
+            mine ? styles.lineMine : styles.lineTheirs,
+          ]}
+        >
           {actionable && Platform.OS === 'web' && (
             <Pressable
               onPress={openActions}
@@ -949,20 +878,25 @@ export default function ConversationScreen() {
               style={styles.menuButton}
               accessibilityLabel="Actions du message"
             >
-              <Ionicons name="ellipsis-horizontal" size={16} color="#8493A8" />
+              <Ionicons
+                name="ellipsis-horizontal"
+                size={16}
+                color="#8493A8"
+              />
             </Pressable>
           )}
-
-
 
           <Pressable
             onLongPress={openActions}
             delayLongPress={350}
             style={[
               styles.bubble,
-              mine ? styles.bubbleMine : styles.bubbleTheirs,
+              mine
+                ? styles.bubbleMine
+                : styles.bubbleTheirs,
               isImage && !deleted && styles.bubbleImage,
-              item.status === 'pending' && styles.bubblePending,
+              item.status === 'pending' &&
+                styles.bubblePending,
             ]}
           >
             {deleted ? (
@@ -970,15 +904,17 @@ export default function ConversationScreen() {
                 <Ionicons
                   name="ban-outline"
                   size={14}
-                  color={mine ? '#5A3511' : '#8493A8'}
+                  color={
+                    mine ? '#5A3511' : '#8493A8'
+                  }
                 />
-
-
 
                 <Text
                   style={[
                     styles.tombstoneText,
-                    mine ? styles.tombstoneMine : styles.tombstoneTheirs,
+                    mine
+                      ? styles.tombstoneMine
+                      : styles.tombstoneTheirs,
                   ]}
                 >
                   Message supprimé
@@ -993,76 +929,125 @@ export default function ConversationScreen() {
                   setViewer({
                     mediaPath: item.media_path,
                     localUri: item.localUri,
-                    canDownload: item.status === 'sent',
+                    canDownload:
+                      item.status === 'sent',
                   })
                 }
               />
             ) : (
-              <Text style={mine ? styles.textMine : styles.textTheirs}>
+              <Text
+                style={
+                  mine
+                    ? styles.textMine
+                    : styles.textTheirs
+                }
+              >
                 {item.content}
               </Text>
             )}
 
-
-
             <View
-              style={[styles.metaRow, isImage && !deleted && styles.metaImage]}
+              style={[
+                styles.metaRow,
+                isImage && !deleted && styles.metaImage,
+              ]}
             >
-              <Text style={mine ? styles.metaMineText : styles.metaTheirsText}>
-                {item.edited_at && !deleted ? 'modifié · ' : ''}
+              <Text
+                style={
+                  mine
+                    ? styles.metaMineText
+                    : styles.metaTheirsText
+                }
+              >
+                {item.edited_at && !deleted
+                  ? 'modifié · '
+                  : ''}
                 {formatMessageTime(item.created_at)}
-                {mine && item.status === 'pending' ? ' · Envoi…' : ''}
+                {mine && item.status === 'pending'
+                  ? ' · Envoi…'
+                  : ''}
               </Text>
-
-
 
               {delivery && (
                 <Ionicons
-                  name={delivery === 'sent' ? 'checkmark' : 'checkmark-done'}
+                  name={
+                    delivery === 'sent'
+                      ? 'checkmark'
+                      : 'checkmark-done'
+                  }
                   size={14}
-                  color={delivery === 'read' ? '#FFFFFF' : '#5A3511'}
+                  color={
+                    delivery === 'read'
+                      ? '#FFFFFF'
+                      : '#5A3511'
+                  }
                 />
               )}
             </View>
           </Pressable>
         </View>
 
-
-
         {mine && item.status === 'failed' && (
-          <Pressable onPress={() => handleRetry(item)} hitSlop={8}>
-            <Text style={styles.failed}>Échec de l'envoi · Réessayer</Text>
+          <Pressable
+            onPress={() => handleRetry(item)}
+            hitSlop={8}
+          >
+            <Text style={styles.failed}>
+              Échec de l'envoi · Réessayer
+            </Text>
           </Pressable>
         )}
       </View>
     );
   }
 
-
-
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-
-
 
       <ConversationHeader
         onBack={() => router.back()}
         name={name}
         avatarUrl={headerAvatarUrl}
+        rightAction={
+          !isGroup && conversation?.other_user ? (
+            <Pressable
+              onPress={handleStartAudioCall}
+              disabled={startingCall}
+              hitSlop={8}
+              accessibilityLabel="Démarrer un appel audio"
+            >
+              {startingCall ? (
+                <ActivityIndicator
+                  size="small"
+                  color="#FF8A32"
+                />
+              ) : (
+                <Ionicons
+                  name="call-outline"
+                  size={22}
+                  color="#FFFFFF"
+                />
+              )}
+            </Pressable>
+          ) : undefined
+        }
         showInfo={!!conversation}
         onPressInfo={
           isGroup
             ? () =>
                 router.push({
-                  pathname: '/group/[conversationId]',
+                  pathname:
+                    '/group/[conversationId]',
                   params: { conversationId },
                 })
             : undefined
         }
       >
         {isGroup ? (
-          <Text style={styles.groupSubtitle}>Groupe</Text>
+          <Text style={styles.groupSubtitle}>
+            Groupe
+          </Text>
         ) : (
           <PresenceLabel
             typing={peerTyping}
@@ -1076,16 +1061,18 @@ export default function ConversationScreen() {
         )}
       </ConversationHeader>
 
-
-
       {!connected && !loading && !error && (
-        <Text style={styles.banner}>Connexion en cours…</Text>
+        <Text style={styles.banner}>
+          Connexion en cours…
+        </Text>
       )}
 
-
-
       {loading ? (
-        <ActivityIndicator color="#FF8A32" size="large" style={styles.loader} />
+        <ActivityIndicator
+          color="#FF8A32"
+          size="large"
+          style={styles.loader}
+        />
       ) : error ? (
         <Text style={styles.error}>{error}</Text>
       ) : (
@@ -1096,7 +1083,10 @@ export default function ConversationScreen() {
         >
           {messages.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>Aucun message pour le moment</Text>
+              <Text style={styles.emptyTitle}>
+                Aucun message pour le moment
+              </Text>
+
               <Text style={styles.emptyText}>
                 {isGroup
                   ? 'Écris le premier message dans ce groupe.'
@@ -1118,139 +1108,199 @@ export default function ConversationScreen() {
               onEndReachedThreshold={0.3}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode={
-                Platform.OS === 'ios' ? 'interactive' : 'on-drag'
+                Platform.OS === 'ios'
+                  ? 'interactive'
+                  : 'on-drag'
               }
               ListFooterComponent={
                 loadingMore ? (
-                  <ActivityIndicator color="#FF8A32" style={styles.moreLoader} />
+                  <ActivityIndicator
+                    color="#FF8A32"
+                    style={styles.moreLoader}
+                  />
                 ) : undefined
               }
             />
           )}
 
-
-
-          {!!notice && <Text style={styles.notice}>{notice}</Text>}
-
-
+          {!!notice && (
+            <Text style={styles.notice}>
+              {notice}
+            </Text>
+          )}
 
           {!isGroup && blockedByMe ? (
             <View
-              style={[styles.blockedBar, { paddingBottom: bottomPadding + 6 }]}
+              style={[
+                styles.blockedBar,
+                {
+                  paddingBottom: bottomPadding + 6,
+                },
+              ]}
             >
               <Text style={styles.blockedText}>
                 Tu as bloqué cet utilisateur.
               </Text>
 
-
-
-              <Pressable onPress={handleUnblock} hitSlop={8}>
-                <Text style={styles.unblock}>Débloquer</Text>
+              <Pressable
+                onPress={handleUnblock}
+                hitSlop={8}
+              >
+                <Text style={styles.unblock}>
+                  Débloquer
+                </Text>
               </Pressable>
             </View>
           ) : draftImage ? (
-            <View style={[styles.draftBar, { paddingBottom: bottomPadding }]}>
-              <Image source={{ uri: draftImage.uri }} style={styles.draftThumb} />
-              <Text style={styles.draftText}>Photo prête à envoyer</Text>
+            <View
+              style={[
+                styles.draftBar,
+                { paddingBottom: bottomPadding },
+              ]}
+            >
+              <Image
+                source={{ uri: draftImage.uri }}
+                style={styles.draftThumb}
+              />
 
-
+              <Text style={styles.draftText}>
+                Photo prête à envoyer
+              </Text>
 
               <Pressable
-                style={[styles.draftButton, styles.draftCancel]}
+                style={[
+                  styles.draftButton,
+                  styles.draftCancel,
+                ]}
                 onPress={() => setDraftImage(null)}
               >
-                <Text style={styles.draftCancelText}>Annuler</Text>
+                <Text style={styles.draftCancelText}>
+                  Annuler
+                </Text>
               </Pressable>
 
-
-
               <Pressable
-                style={[styles.draftButton, styles.draftSend]}
+                style={[
+                  styles.draftButton,
+                  styles.draftSend,
+                ]}
                 onPress={handleSendPhoto}
                 disabled={!myId}
               >
-                <Text style={styles.sendText}>Envoyer</Text>
+                <Text style={styles.sendText}>
+                  Envoyer
+                </Text>
               </Pressable>
             </View>
           ) : (
             <View>
               {!!editing && (
                 <View style={styles.editBanner}>
-                  <Ionicons name="create-outline" size={18} color="#FF8A32" />
-
-
+                  <Ionicons
+                    name="create-outline"
+                    size={18}
+                    color="#FF8A32"
+                  />
 
                   <View style={styles.editBannerText}>
-                    <Text style={styles.editTitle}>Modifier le message</Text>
-                    <Text style={styles.editPreview} numberOfLines={1}>
+                    <Text style={styles.editTitle}>
+                      Modifier le message
+                    </Text>
+
+                    <Text
+                      style={styles.editPreview}
+                      numberOfLines={1}
+                    >
                       {editing.content}
                     </Text>
                   </View>
-
-
 
                   <Pressable
                     onPress={cancelEdit}
                     hitSlop={10}
                     accessibilityLabel="Annuler la modification"
                   >
-                    <Ionicons name="close" size={20} color="#A8B6C8" />
+                    <Ionicons
+                      name="close"
+                      size={20}
+                      color="#A8B6C8"
+                    />
                   </Pressable>
                 </View>
               )}
 
-
-
-              <View style={[styles.inputBar, { paddingBottom: bottomPadding }]}>
+              <View
+                style={[
+                  styles.inputBar,
+                  { paddingBottom: bottomPadding },
+                ]}
+              >
                 <View style={styles.inputPill}>
                   <TextInput
-                    style={[styles.input, { height: inputHeight }]}
+                    style={[
+                      styles.input,
+                      { height: inputHeight },
+                    ]}
                     placeholder={
-                      editing ? 'Modifier le message...' : 'Écris un message...'
+                      editing
+                        ? 'Modifier le message...'
+                        : 'Écris un message...'
                     }
                     placeholderTextColor="#8493A8"
                     value={input}
-                    onChangeText={handleChangeText}
+                    onChangeText={
+                      handleChangeText
+                    }
                     multiline
                     maxLength={MESSAGE_MAX_LENGTH}
-                    scrollEnabled={inputHeight >= MAX_INPUT_HEIGHT}
-                    onContentSizeChange={(event) => {
+                    scrollEnabled={
+                      inputHeight >= MAX_INPUT_HEIGHT
+                    }
+                    onContentSizeChange={(
+                      event
+                    ) => {
                       const contentHeight =
-                        event.nativeEvent.contentSize.height;
-
-
+                        event.nativeEvent
+                          .contentSize.height;
 
                       setInputHeight(
                         Math.min(
                           MAX_INPUT_HEIGHT,
                           Math.max(
                             MIN_INPUT_HEIGHT,
-                            contentHeight + INPUT_VERTICAL_PADDING
+                            contentHeight +
+                              INPUT_VERTICAL_PADDING
                           )
                         )
                       );
                     }}
                   />
 
-
-
                   {!editing && (
                     <>
                       <Pressable
                         style={styles.pillButton}
-                        onPress={() => handlePickPhoto('library')}
+                        onPress={() =>
+                          handlePickPhoto('library')
+                        }
                         accessibilityLabel="Choisir une photo"
                         hitSlop={4}
                       >
-                        <Ionicons name="image-outline" size={22} color="#A8B6C8" />
+                        <Ionicons
+                          name="image-outline"
+                          size={22}
+                          color="#A8B6C8"
+                        />
                       </Pressable>
-
-
 
                       {Platform.OS !== 'web' && (
                         <Pressable
                           style={styles.pillButton}
-                          onPress={() => handlePickPhoto('camera')}
+                          onPress={() =>
+                            handlePickPhoto(
+                              'camera'
+                            )
+                          }
                           accessibilityLabel="Prendre une photo"
                           hitSlop={4}
                         >
@@ -1265,21 +1315,34 @@ export default function ConversationScreen() {
                   )}
                 </View>
 
-
-
                 <Pressable
-                  style={[styles.sendButton, !canSend && styles.sendDisabled]}
-                  onPress={editing ? handleSaveEdit : handleSend}
+                  style={[
+                    styles.sendButton,
+                    !canSend && styles.sendDisabled,
+                  ]}
+                  onPress={
+                    editing
+                      ? handleSaveEdit
+                      : handleSend
+                  }
                   disabled={!canSend}
                   accessibilityLabel={
-                    editing ? 'Enregistrer la modification' : 'Envoyer le message'
+                    editing
+                      ? 'Enregistrer la modification'
+                      : 'Envoyer le message'
                   }
                 >
                   {savingEdit ? (
-                    <ActivityIndicator color="#081426" />
+                    <ActivityIndicator
+                      color="#081426"
+                    />
                   ) : (
                     <Ionicons
-                      name={editing ? 'checkmark' : 'send'}
+                      name={
+                        editing
+                          ? 'checkmark'
+                          : 'send'
+                      }
                       size={20}
                       color="#081426"
                     />
@@ -1291,11 +1354,10 @@ export default function ConversationScreen() {
         </KeyboardAvoidingView>
       )}
 
-
-
-      <ImageViewerModal target={viewer} onClose={() => setViewer(null)} />
-
-
+      <ImageViewerModal
+        target={viewer}
+        onClose={() => setViewer(null)}
+      />
 
       <MessageActionsModal
         target={
@@ -1306,8 +1368,12 @@ export default function ConversationScreen() {
                   actionsTarget.type === 'image'
                     ? '📷 Photo'
                     : actionsTarget.content ?? '',
-                canEdit: canEditMessage(actionsTarget, myId),
-                failed: actionsTarget.status === 'failed',
+                canEdit: canEditMessage(
+                  actionsTarget,
+                  myId
+                ),
+                failed:
+                  actionsTarget.status === 'failed',
               }
             : null
         }
@@ -1319,20 +1385,21 @@ export default function ConversationScreen() {
   );
 }
 
-
-
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+
   container: {
     flex: 1,
     backgroundColor: '#081426',
   },
+
   groupSubtitle: {
     color: '#A8B6C8',
     fontSize: 13,
   },
+
   banner: {
     backgroundColor: '#10223A',
     color: '#FF8A32',
@@ -1340,84 +1407,106 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     fontSize: 12,
   },
+
   loader: {
     marginTop: 40,
   },
+
   moreLoader: {
     marginVertical: 12,
   },
+
   list: {
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+
   row: {
     marginBottom: 8,
     maxWidth: '100%',
   },
+
   rowMine: {
     alignItems: 'flex-end',
   },
+
   rowTheirs: {
     alignItems: 'flex-start',
   },
+
   line: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     maxWidth: '100%',
   },
+
   lineMine: {
     justifyContent: 'flex-end',
   },
+
   lineTheirs: {
     justifyContent: 'flex-start',
   },
+
   menuButton: {
     paddingHorizontal: 8,
     paddingVertical: 8,
   },
+
   bubble: {
     maxWidth: '80%',
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
+
   bubbleImage: {
     padding: 4,
   },
+
   bubbleMine: {
     backgroundColor: '#FF8A32',
     borderBottomRightRadius: 4,
   },
+
   bubbleTheirs: {
     backgroundColor: '#10223A',
     borderBottomLeftRadius: 4,
   },
+
   bubblePending: {
     opacity: 0.65,
   },
+
   textMine: {
     color: '#081426',
     fontSize: 15,
   },
+
   textTheirs: {
     color: '#FFFFFF',
     fontSize: 15,
   },
+
   tombstone: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
+
   tombstoneText: {
     fontSize: 14,
     fontStyle: 'italic',
   },
+
   tombstoneMine: {
     color: '#5A3511',
   },
+
   tombstoneTheirs: {
     color: '#8493A8',
   },
+
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1425,40 +1514,48 @@ const styles = StyleSheet.create({
     gap: 4,
     marginTop: 4,
   },
+
   metaMineText: {
     color: '#5A3511',
     fontSize: 11,
   },
+
   metaTheirsText: {
     color: '#8493A8',
     fontSize: 11,
   },
+
   metaImage: {
     paddingHorizontal: 6,
     paddingBottom: 2,
   },
+
   failed: {
     color: '#FF8A32',
     fontSize: 12,
     marginTop: 4,
   },
+
   empty: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 30,
   },
+
   emptyTitle: {
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '600',
     textAlign: 'center',
   },
+
   emptyText: {
     color: '#A8B6C8',
     marginTop: 10,
     textAlign: 'center',
   },
+
   notice: {
     color: '#FF8A32',
     textAlign: 'center',
@@ -1466,6 +1563,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 8,
   },
+
   blockedBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1475,13 +1573,16 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#10223A',
   },
+
   blockedText: {
     color: '#A8B6C8',
   },
+
   unblock: {
     color: '#FF8A32',
     fontWeight: '700',
   },
+
   draftBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1491,32 +1592,39 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#10223A',
   },
+
   draftThumb: {
     width: 56,
     height: 56,
     borderRadius: 10,
     backgroundColor: '#263A54',
   },
+
   draftText: {
     flex: 1,
     color: '#A8B6C8',
     fontSize: 13,
   },
+
   draftButton: {
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+
   draftCancel: {
     backgroundColor: '#263A54',
   },
+
   draftCancelText: {
     color: '#FFFFFF',
     fontWeight: '600',
   },
+
   draftSend: {
     backgroundColor: '#FF8A32',
   },
+
   editBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1527,19 +1635,23 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#263A54',
   },
+
   editBannerText: {
     flex: 1,
   },
+
   editTitle: {
     color: '#FF8A32',
     fontSize: 13,
     fontWeight: '700',
   },
+
   editPreview: {
     color: '#A8B6C8',
     fontSize: 13,
     marginTop: 2,
   },
+
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -1550,6 +1662,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#10223A',
     backgroundColor: '#081426',
   },
+
   inputPill: {
     flex: 1,
     flexDirection: 'row',
@@ -1561,6 +1674,7 @@ const styles = StyleSheet.create({
     paddingLeft: 6,
     paddingRight: 4,
   },
+
   input: {
     flex: 1,
     color: '#FFFFFF',
@@ -1569,12 +1683,14 @@ const styles = StyleSheet.create({
     paddingVertical: INPUT_VERTICAL_PADDING / 2,
     textAlignVertical: 'center',
   },
+
   pillButton: {
     width: 36,
     height: MIN_INPUT_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   sendButton: {
     width: MIN_INPUT_HEIGHT + 2,
     height: MIN_INPUT_HEIGHT + 2,
@@ -1583,13 +1699,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   sendDisabled: {
     opacity: 0.4,
   },
+
   sendText: {
     color: '#081426',
     fontWeight: '700',
   },
+
   error: {
     color: '#FF8A32',
     marginTop: 30,

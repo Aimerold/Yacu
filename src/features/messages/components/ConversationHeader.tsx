@@ -6,14 +6,17 @@ import { colors } from '@/theme/tokens';
 
 
 
+
 type Props = {
   onBack: () => void;
   name: string;
   avatarUrl: string | null;
   showInfo: boolean;
   onPressInfo?: () => void;
+  rightAction?: ReactNode;
   children?: ReactNode;
 };
+
 
 
 
@@ -23,6 +26,7 @@ export default function ConversationHeader({
   avatarUrl,
   showInfo,
   onPressInfo,
+  rightAction,
   children,
 }: Props) {
   return (
@@ -32,33 +36,42 @@ export default function ConversationHeader({
       </Pressable>
 
 
-      {showInfo && (
-        <Pressable
-          style={styles.info}
-          onPress={onPressInfo}
-          disabled={!onPressInfo}
-          accessibilityLabel={`Informations de ${name}`}
-        >
-          <Avatar name={name} uri={avatarUrl} size={44} />
+
+      <View style={styles.row}>
+        {showInfo && (
+          <Pressable
+            style={styles.info}
+            onPress={onPressInfo}
+            disabled={!onPressInfo}
+            accessibilityLabel={`Informations de ${name}`}
+          >
+            <Avatar name={name} uri={avatarUrl} size={44} />
 
 
-          <View style={styles.text}>
-            <Text style={styles.name} numberOfLines={1}>
-              {name}
-            </Text>
-            {children}
-          </View>
+
+            <View style={styles.text}>
+              <Text style={styles.name} numberOfLines={1}>
+                {name}
+              </Text>
+              {children}
+            </View>
 
 
-          {onPressInfo && (
-            <Ionicons
-              name="information-circle-outline"
-              size={24}
-              color={colors.textMuted}
-            />
-          )}
-        </Pressable>
-      )}
+
+            {onPressInfo && (
+              <Ionicons
+                name="information-circle-outline"
+                size={24}
+                color={colors.textMuted}
+              />
+            )}
+          </Pressable>
+        )}
+
+
+
+        {rightAction}
+      </View>
     </View>
   );
 }
@@ -78,7 +91,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 14,
   },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   info: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
