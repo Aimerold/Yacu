@@ -192,7 +192,10 @@ export async function getMyConversations(): Promise<
   );
 }
 
-/** Retourne une conversation si l'utilisateur en est membre. */
+
+/**
+ * Récupère une conversation privée ou un groupe par son identifiant.
+ */
 export async function getConversationById(
   conversationId: string
 ): Promise<ConversationSummary | null> {
@@ -207,11 +210,17 @@ export async function getConversationById(
     .eq('is_active', true)
     .maybeSingle();
 
-  if (error) throw new Error(error.message);
-  if (!data) return null;
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    return null;
+  }
 
   const row = data as ConversationRow;
 
+  // Pour une conversation privée, récupérer le profil de l'autre utilisateur.
   const users = await loadOtherUsers([row], me);
 
   const otherId =
@@ -221,17 +230,22 @@ export async function getConversationById(
         : row.user_a_id
       : null;
 
+  const otherUser = otherId
+    ? users.get(otherId) ?? null
+    : null;
+
   return {
     id: row.id,
     created_at: row.created_at,
     type: row.type,
     name: row.name,
     avatar_url: row.avatar_url,
-    other_user: otherId ? users.get(otherId) ?? null : null,
+    other_user: otherUser,
     last_message: null,
     unread_count: 0,
   };
 }
+
 
 /** Crée ou retrouve une conversation privée. */
 export async function createDirectConversation(
@@ -247,4 +261,41 @@ export async function createDirectConversation(
   if (error) throw new Error(error.message);
 
   return data as string;
+}
+
+/** Retourne les informations d'un groupe si l'utilisateur en est membre. */
+export async function getGroupById(
+  conversationId: string
+): Promise<ConversationSummary | null> {
+  const me = await getCurrentUserId();
+
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .select(
+      'id, created_at, user_a_id, user_b_id, created_by, type, name, avatar_url'
+    )
+    .eq('id', conversationId)
+    .eq('type', 'group')
+    .eq('is_active', true)
+    .maybeSingle();
+
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+
+  const row = data as ConversationRow;
+
+
+  return {
+    id: row.id,
+    created_at: row.created_at,
+    type: row.type,
+    name: row.name,
+    avatar_url: row.avatar_url,
+    other_user: null,
+    last_message: null,
+    unread_count: 0,
+  };
 }

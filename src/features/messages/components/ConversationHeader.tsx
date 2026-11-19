@@ -1,23 +1,28 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Avatar from '@/components/ui/Avatar';
 import { colors } from '@/theme/tokens';
+
+
 
 type Props = {
   onBack: () => void;
   name: string;
   avatarUrl: string | null;
-  /** Affiche l'avatar et le nom (faux pendant le chargement de la conversation). */
   showInfo: boolean;
-  /** Ligne d'état sous le nom (présence, saisie…). */
+  onPressInfo?: () => void;
   children?: ReactNode;
 };
+
+
 
 export default function ConversationHeader({
   onBack,
   name,
   avatarUrl,
   showInfo,
+  onPressInfo,
   children,
 }: Props) {
   return (
@@ -26,9 +31,16 @@ export default function ConversationHeader({
         <Text style={styles.back}>← Retour</Text>
       </Pressable>
 
+
       {showInfo && (
-        <View style={styles.info}>
+        <Pressable
+          style={styles.info}
+          onPress={onPressInfo}
+          disabled={!onPressInfo}
+          accessibilityLabel={`Informations de ${name}`}
+        >
           <Avatar name={name} uri={avatarUrl} size={44} />
+
 
           <View style={styles.text}>
             <Text style={styles.name} numberOfLines={1}>
@@ -36,11 +48,22 @@ export default function ConversationHeader({
             </Text>
             {children}
           </View>
-        </View>
+
+
+          {onPressInfo && (
+            <Ionicons
+              name="information-circle-outline"
+              size={24}
+              color={colors.textMuted}
+            />
+          )}
+        </Pressable>
       )}
     </View>
   );
 }
+
+
 
 const styles = StyleSheet.create({
   header: {
