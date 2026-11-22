@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import CallHistory from '@/features/calls/components/CallHistory';
 
 import {
   getConversationById,
@@ -1004,6 +1005,8 @@ export default function ConversationScreen() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
+      
+      <CallHistory conversationId={conversationId} />
 
       <ConversationHeader
         onBack={() => router.back()}
