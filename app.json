@@ -26,9 +26,9 @@
       "output": "server",
       "favicon": "./assets/images/iconemoderne.png"
     },
-
     
     "plugins": [
+      "expo-audio",
       "expo-router",
       "@livekit/react-native-expo-plugin",
       "@config-plugins/react-native-webrtc",

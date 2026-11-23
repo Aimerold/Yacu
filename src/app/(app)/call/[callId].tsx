@@ -1,18 +1,5 @@
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import Avatar from '@/components/ui/Avatar';
-import { colors } from '@/theme/tokens';
-import { Room, RoomEvent } from 'livekit-client';
-import { registerGlobals } from '@livekit/react-native';
 
 import {
   getCallWithParticipant,
@@ -20,9 +7,40 @@ import {
   updateCallStatus,
 } from '@/services/call.service';
 
-import { getLiveKitConnection } from '@/services/livekit.service';
 import { supabase } from '@/lib/supabase';
+import { getLiveKitConnection } from '@/services/livekit.service';
+import { colors } from '@/theme/tokens';
 
+import { Ionicons } from '@expo/vector-icons';
+
+import {
+  AudioSession,
+  registerGlobals,
+} from '@livekit/react-native';
+
+import { requestRecordingPermissionsAsync } from 'expo-audio';
+
+import { useLocalSearchParams, useRouter } from 'expo-router';
+
+import { Room, RoomEvent } from 'livekit-client';
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+
+// Enregistrement des API WebRTC LiveKit
 registerGlobals();
 
 const CALL_TIMEOUT_MS = 45 * 1000;
@@ -46,11 +64,38 @@ export default function CallScreen() {
 
   const [callDuration, setCallDuration] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [callStatus, setCallStatus] = useState<string | null>(null);
 
+  // Une seule Room LiveKit pendant la durée de vie du composant
   const room = useMemo(() => new Room(), []);
 
+  // Protection contre les doubles navigations
+  const hasNavigatedRef = useRef(false);
+
+  // État de la session audio
+  const audioSessionStartedRef = useRef(false);
+
+  // État du composant
+  const mountedRef = useRef(true);
+
+  // Indique une déconnexion volontaire
+  const isLeavingRef = useRef(false);
+
   /**
-   * Connecte l'utilisateur à l'appel LiveKit.
+   * Retourner à l'écran précédent une seule fois.
+   */
+  const exitScreen = useCallback(() => {
+    if (hasNavigatedRef.current) return;
+
+    hasNavigatedRef.current = true;
+
+    if (router.canGoBack()) {
+      router.back();
+    }
+  }, [router]);
+
+  /**
+   * Connecter l'utilisateur à l'appel LiveKit.
    */
   const startCall = useCallback(async () => {
     if (!callId || !conversationId) return;
@@ -59,12 +104,17 @@ export default function CallScreen() {
       setConnecting(true);
       setError('');
 
+      // 1. Vérifier que l'appel existe et récupérer le participant
       const { call, participant } =
         await getCallWithParticipant(callId);
 
+      if (!mountedRef.current) return;
+
       setParticipantName(participant.fullName || 'Appel');
       setParticipantAvatar(participant.avatarUrl);
+      setCallStatus(call.status);
 
+      // 2. Vérifier le statut de l'appel
       if (
         call.status !== 'ringing' &&
         call.status !== 'accepted'
@@ -72,26 +122,97 @@ export default function CallScreen() {
         throw new Error('Cet appel n’est plus actif.');
       }
 
+      // 3. Demander la permission microphone
+      const permission =
+        await requestRecordingPermissionsAsync();
+
+      if (!permission.granted) {
+        throw new Error(
+          'Permission microphone refusée. Autorisez le microphone pour appeler.'
+        );
+      }
+
+      if (!mountedRef.current) return;
+
+      // 4. Récupérer les informations de connexion LiveKit
       const connection = await getLiveKitConnection(
         callId,
         conversationId
       );
 
-      await room.connect(connection.url, connection.token);
+      if (!mountedRef.current) return;
 
+      // 5. Démarrer la session audio AVANT room.connect()
+      await AudioSession.startAudioSession();
+
+      audioSessionStartedRef.current = true;
+
+      if (!mountedRef.current) {
+        await AudioSession.stopAudioSession();
+        audioSessionStartedRef.current = false;
+        return;
+      }
+
+      // 6. Connecter la Room LiveKit
+      await room.connect(
+        connection.url,
+        connection.token
+      );
+
+      if (!mountedRef.current) {
+        await room.disconnect();
+        return;
+      }
+
+      // 7. Activer le microphone et publier la piste audio
+      await room.localParticipant.setMicrophoneEnabled(true);
+
+      if (!mountedRef.current) {
+        await room.disconnect();
+        return;
+      }
+
+      setMuted(false);
       setConnected(true);
+
     } catch (e) {
       const message =
         e instanceof Error
           ? e.message
           : 'Impossible de rejoindre l’appel.';
 
-      setError(message);
+      if (mountedRef.current) {
+        setError(message);
+      }
+
+      // Nettoyer une éventuelle connexion partielle
+      try {
+        if (room.state !== 'disconnected') {
+          await room.disconnect();
+        }
+      } catch {
+        // Ignorer les erreurs de déconnexion
+      }
+
+      if (audioSessionStartedRef.current) {
+        try {
+          await AudioSession.stopAudioSession();
+          audioSessionStartedRef.current = false;
+        } catch {
+          // Ignorer les erreurs de nettoyage audio
+        }
+      }
+
     } finally {
-      setConnecting(false);
+      if (mountedRef.current) {
+        setConnecting(false);
+      }
     }
   }, [callId, conversationId, room]);
 
+  /**
+   * Démarrer la connexion à l'ouverture de l'écran.
+   */
   useEffect(() => {
     void startCall();
   }, [startCall]);
@@ -103,18 +224,29 @@ export default function CallScreen() {
     const handleDisconnected = () => {
       setConnected(false);
       setMuted(false);
-      router.back();
+
+      if (isLeavingRef.current) {
+        exitScreen();
+      } else if (mountedRef.current) {
+        setError('La connexion à l’appel a été interrompue.');
+      }
     };
 
-    room.on(RoomEvent.Disconnected, handleDisconnected);
+    room.on(
+      RoomEvent.Disconnected,
+      handleDisconnected
+    );
 
     return () => {
-      room.off(RoomEvent.Disconnected, handleDisconnected);
+      room.off(
+        RoomEvent.Disconnected,
+        handleDisconnected
+      );
     };
-  }, [room, router]);
+  }, [room, exitScreen]);
 
   /**
-   * Écoute les changements de statut de l'appel.
+   * Écouter les changements de statut de l'appel dans Supabase.
    */
   useEffect(() => {
     if (!callId) return;
@@ -130,16 +262,24 @@ export default function CallScreen() {
           filter: `id=eq.${callId}`,
         },
         (payload) => {
-          const call = payload.new as { status: string };
+          const updatedCall = payload.new as {
+            status: string;
+          };
+
+          setCallStatus(updatedCall.status);
 
           if (
-            call.status === 'declined' ||
-            call.status === 'cancelled' ||
-            call.status === 'missed' ||
-            call.status === 'ended'
+            updatedCall.status === 'declined' ||
+            updatedCall.status === 'cancelled' ||
+            updatedCall.status === 'missed' ||
+            updatedCall.status === 'ended' ||
+            updatedCall.status === 'failed'
           ) {
-            room.disconnect();
-            router.back();
+            isLeavingRef.current = true;
+
+            void room.disconnect();
+
+            exitScreen();
           }
         }
       )
@@ -148,25 +288,49 @@ export default function CallScreen() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [callId, room, router]);
+  }, [callId, room, exitScreen]);
 
   /**
    * Gestion du délai maximal de sonnerie.
+   * Le délai s'applique uniquement aux appels en attente.
    */
   useEffect(() => {
-    if (!callId || connected || error) return;
+    if (
+      !callId ||
+      connected ||
+      error ||
+      callStatus !== 'ringing'
+    ) {
+      return;
+    }
 
     const timer = setTimeout(() => {
       void markCallMissed(callId)
         .then(() => {
-          room.disconnect();
-          router.back();
+          isLeavingRef.current = true;
+
+          void room.disconnect();
+
+          exitScreen();
         })
-        .catch(() => undefined);
+        .catch(() => {
+          if (mountedRef.current) {
+            setError(
+              'Impossible de terminer le délai de sonnerie.'
+            );
+          }
+        });
     }, CALL_TIMEOUT_MS);
 
     return () => clearTimeout(timer);
-  }, [callId, connected, error, room, router]);
+  }, [
+    callId,
+    callStatus,
+    connected,
+    error,
+    room,
+    exitScreen,
+  ]);
 
   /**
    * Compteur de durée de l'appel.
@@ -182,7 +346,7 @@ export default function CallScreen() {
   }, [connected]);
 
   /**
-   * Active ou désactive le microphone.
+   * Activer ou désactiver le microphone.
    */
   const toggleMute = useCallback(async () => {
     if (!connected || ending) return;
@@ -195,13 +359,16 @@ export default function CallScreen() {
       );
 
       setMuted(nextMuted);
+
     } catch {
-      setError('Impossible de modifier le microphone.');
+      setError(
+        'Impossible de modifier le microphone.'
+      );
     }
   }, [connected, ending, muted, room]);
 
   /**
-   * Termine l'appel.
+   * Terminer l'appel.
    */
   const endCall = useCallback(async () => {
     if (!callId || ending) return;
@@ -214,8 +381,12 @@ export default function CallScreen() {
         connected ? 'ended' : 'cancelled'
       );
 
-      room.disconnect();
-      router.back();
+      isLeavingRef.current = true;
+
+      await room.disconnect();
+
+      exitScreen();
+
     } catch (e) {
       const message =
         e instanceof Error
@@ -223,33 +394,62 @@ export default function CallScreen() {
           : "Impossible de terminer l'appel.";
 
       setError(message);
+
     } finally {
-      setEnding(false);
+      if (mountedRef.current) {
+        setEnding(false);
+      }
     }
-  }, [callId, connected, ending, room, router]);
+  }, [
+    callId,
+    connected,
+    ending,
+    room,
+    exitScreen,
+  ]);
 
   /**
    * Nettoyage à la fermeture de l'écran.
    */
   useEffect(() => {
     return () => {
-      if (room.state !== 'disconnected') {
-        room.disconnect();
-      }
+      mountedRef.current = false;
+      isLeavingRef.current = true;
+      hasNavigatedRef.current = true;
+
+      void (async () => {
+        try {
+          if (room.state !== 'disconnected') {
+            await room.disconnect();
+          }
+        } catch {
+          // Ignorer les erreurs de déconnexion
+        }
+
+        if (audioSessionStartedRef.current) {
+          try {
+            await AudioSession.stopAudioSession();
+
+            audioSessionStartedRef.current = false;
+          } catch {
+            // Ignorer les erreurs de nettoyage audio
+          }
+        }
+      })();
     };
   }, [room]);
 
   /**
-   * Vérification de l'identifiant de l'appel.
+   * Vérifier l'identifiant de l'appel.
    */
   useEffect(() => {
-    if (!callId) {
-      router.back();
+    if (!callId || !conversationId) {
+      exitScreen();
     }
-  }, [callId, router]);
+  }, [callId, conversationId, exitScreen]);
 
   /**
-   * Formate la durée de l'appel.
+   * Formater la durée de l'appel.
    */
   function formatDuration(seconds: number) {
     const minutes = Math.floor(seconds / 60);
@@ -263,6 +463,7 @@ export default function CallScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.center}>
+
         <Avatar
           name={participantName}
           uri={participantAvatar}
@@ -300,6 +501,7 @@ export default function CallScreen() {
 
         {/* Commandes de l'appel */}
         <View style={styles.actions}>
+
           {/* Bouton microphone */}
           <Pressable
             style={[
@@ -311,7 +513,9 @@ export default function CallScreen() {
             disabled={!connected || ending}
             accessibilityRole="button"
             accessibilityLabel={
-              muted ? 'Activer le microphone' : 'Désactiver le microphone'
+              muted
+                ? 'Activer le microphone'
+                : 'Désactiver le microphone'
             }
           >
             <Ionicons
@@ -339,6 +543,7 @@ export default function CallScreen() {
               />
             )}
           </Pressable>
+
         </View>
       </View>
     </View>

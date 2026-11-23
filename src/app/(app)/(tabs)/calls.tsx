@@ -1,17 +1,17 @@
+import Avatar from '@/components/ui/Avatar';
+import { getCallHistory } from '@/services/call.service';
+import { colors } from '@/theme/tokens';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import Avatar from '@/components/ui/Avatar';
-import { colors } from '@/theme/tokens';
-import { getCallHistory } from '@/services/call.service';
 
 
 

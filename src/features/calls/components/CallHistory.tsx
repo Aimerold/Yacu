@@ -1,4 +1,10 @@
 
+import { supabase } from '@/lib/supabase';
+import type { Call } from '@/services/call.service';
+import { getLatestCall } from '@/services/call.service';
+import { colors } from '@/theme/tokens';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -7,12 +13,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/tokens';
-import type { Call } from '@/services/call.service';
-import { getLatestCall } from '@/services/call.service';
 
 type Props = {
   conversationId: string;
@@ -20,26 +20,45 @@ type Props = {
 
 export default function CallHistory({ conversationId }: Props) {
   const router = useRouter();
+
   const [call, setCall] = useState<Call | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
 
     async function load() {
       try {
+        // Récupérer l'utilisateur connecté
+        const { data: sessionData } = await supabase.auth.getSession();
+
+        if (active) {
+          setCurrentUserId(sessionData.session?.user.id ?? null);
+        }
+
+        // Récupérer le dernier appel
         const latestCall = await getLatestCall(conversationId);
 
-        if (active) setCall(latestCall);
-      } catch {
-        if (active) setCall(null);
+        if (active) {
+          setCall(latestCall);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement de l’appel :', error);
+
+        if (active) {
+          setCall(null);
+        }
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     }
 
     void load();
 
+    // Écouter les changements en temps réel dans la table calls
     const channel = supabase
       .channel(`call-history:${conversationId}`)
       .on(
@@ -53,7 +72,9 @@ export default function CallHistory({ conversationId }: Props) {
         () => {
           void getLatestCall(conversationId)
             .then((latestCall) => {
-              if (active) setCall(latestCall);
+              if (active) {
+                setCall(latestCall);
+              }
             })
             .catch(() => undefined);
         }
@@ -76,7 +97,10 @@ export default function CallHistory({ conversationId }: Props) {
 
   if (!call) return null;
 
-  const isIncoming = call.callee_id === call.current_user_id;
+  // Déterminer si l'appel est entrant
+  const isIncoming =
+    currentUserId !== null &&
+    call.callee_id === currentUserId;
 
   const label =
     call.status === 'missed'
@@ -104,6 +128,7 @@ export default function CallHistory({ conversationId }: Props) {
       })
     : '';
 
+  // Formater la durée de l'appel
   function formatDuration(seconds: number) {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -111,9 +136,11 @@ export default function CallHistory({ conversationId }: Props) {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
-  // Correction : on passe explicitement l'appel à la fonction
+  // Calculer la durée de l'appel
   function getDuration(currentCall: Call) {
-    if (!currentCall.started_at || !currentCall.ended_at) return null;
+    if (!currentCall.started_at || !currentCall.ended_at) {
+      return null;
+    }
 
     const startedAt = new Date(currentCall.started_at).getTime();
     const endedAt = new Date(currentCall.ended_at).getTime();
@@ -126,20 +153,30 @@ export default function CallHistory({ conversationId }: Props) {
     return formatDuration(seconds);
   }
 
-  // Correction : on vérifie que call existe avant de calculer la durée
-  const duration = call ? getDuration(call) : null;
+  const duration = getDuration(call);
 
+  // Ouvrir l'écran de l'appel
   function openCall() {
-    if (!call) return;
+    const currentCall = call;
+
+    if (!currentCall) return;
+
+    if (
+      currentCall.status !== 'ringing' &&
+      currentCall.status !== 'accepted'
+    ) {
+      return;
+    }
 
     router.push({
       pathname: '/call/[callId]',
       params: {
-        callId: call.id,
-        conversationId: call.conversation_id,
+        callId: currentCall.id,
+        conversationId: currentCall.conversation_id,
       },
     });
   }
+
 
   return (
     <Pressable style={styles.container} onPress={openCall}>

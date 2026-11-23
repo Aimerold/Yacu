@@ -1,5 +1,8 @@
 import { supabase } from '@/lib/supabase';
 
+
+
+
 export type CallStatus =
   | 'ringing'
   | 'accepted'
@@ -14,16 +17,14 @@ export type Call = {
   conversation_id: string;
   caller_id: string;
   callee_id: string;
-  status: 'ringing' | 'accepted' | 'declined' | 'cancelled' | 'missed';
+  status: CallStatus;
   created_at: string;
   started_at: string | null;
   ended_at: string | null;
-  current_user_id: string;
 };
 
 async function getCurrentUserId(): Promise<string> {
   const { data, error } = await supabase.auth.getSession();
-
 
   if (error || !data.session) {
     throw new Error('Session invalide. Reconnecte-toi.');
@@ -47,12 +48,18 @@ export async function startAudioCall(
       throw new Error('Un appel est déjà en cours dans cette conversation.');
     }
 
+    if (
+      error.message.includes('user_already_in_call') ||
+      error.message.includes('callee_already_in_call')
+    ) {
+      throw new Error('Un appel est déjà en cours.');
+    }
+
     throw new Error(error.message);
   }
 
   return data as Call;
 }
-
 
 /** Met à jour le statut d'un appel via la fonction sécurisée. */
 export async function updateCallStatus(
@@ -64,7 +71,6 @@ export async function updateCallStatus(
     p_new_status: status,
   });
 
-  
   if (error) throw new Error(error.message);
 }
 
@@ -103,10 +109,11 @@ export async function getLatestCall(
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+
   if (error) throw new Error(error.message);
+
   return data as Call | null;
 }
-
 
 /** Récupère l'appel et les informations du correspondant. */
 export async function getCallWithParticipant(callId: string) {
@@ -173,10 +180,10 @@ export async function getCallWithParticipant(callId: string) {
   };
 }
 
-
 /** Récupère l'historique des appels de l'utilisateur. */
 export async function getCallHistory() {
   const currentUserId = await getCurrentUserId();
+
   const { data, error } = await supabase
     .from('calls')
     .select(
@@ -209,7 +216,9 @@ export async function getCallHistory() {
 
   return (data ?? []).map((item) => {
     const isCaller = item.caller_id === currentUserId;
+
     const participantData = isCaller ? item.callee : item.caller;
+
     const participant = Array.isArray(participantData)
       ? participantData[0]
       : participantData;
