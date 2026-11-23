@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,7 +13,6 @@ import { supabase } from '@/lib/supabase';
 import { colors } from '@/theme/tokens';
 import type { Call } from '@/services/call.service';
 import { getLatestCall } from '@/services/call.service';
-
 
 type Props = {
   conversationId: string;
@@ -39,6 +39,7 @@ export default function CallHistory({ conversationId }: Props) {
     }
 
     void load();
+
     const channel = supabase
       .channel(`call-history:${conversationId}`)
       .on(
@@ -65,7 +66,6 @@ export default function CallHistory({ conversationId }: Props) {
     };
   }, [conversationId]);
 
-
   if (loading) {
     return (
       <View style={styles.container}>
@@ -75,7 +75,9 @@ export default function CallHistory({ conversationId }: Props) {
   }
 
   if (!call) return null;
+
   const isIncoming = call.callee_id === call.current_user_id;
+
   const label =
     call.status === 'missed'
       ? 'Appel manqué'
@@ -102,6 +104,31 @@ export default function CallHistory({ conversationId }: Props) {
       })
     : '';
 
+  function formatDuration(seconds: number) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+
+  // Correction : on passe explicitement l'appel à la fonction
+  function getDuration(currentCall: Call) {
+    if (!currentCall.started_at || !currentCall.ended_at) return null;
+
+    const startedAt = new Date(currentCall.started_at).getTime();
+    const endedAt = new Date(currentCall.ended_at).getTime();
+
+    const seconds = Math.max(
+      0,
+      Math.round((endedAt - startedAt) / 1000)
+    );
+
+    return formatDuration(seconds);
+  }
+
+  // Correction : on vérifie que call existe avant de calculer la durée
+  const duration = call ? getDuration(call) : null;
+
   function openCall() {
     if (!call) return;
 
@@ -118,14 +145,16 @@ export default function CallHistory({ conversationId }: Props) {
     <Pressable style={styles.container} onPress={openCall}>
       <Ionicons name={iconName} size={18} color={iconColor} />
 
-
       <Text style={styles.label}>{label}</Text>
+
+      {duration ? (
+        <Text style={styles.duration}>{duration}</Text>
+      ) : null}
+
       <Text style={styles.time}>{time}</Text>
     </Pressable>
   );
 }
-
-
 
 const styles = StyleSheet.create({
   container: {
@@ -141,6 +170,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 14,
     flex: 1,
+  },
+  duration: {
+    color: colors.textSecondary,
+    fontSize: 12,
   },
   time: {
     color: colors.textSecondary,

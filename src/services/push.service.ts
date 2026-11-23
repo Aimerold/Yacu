@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
-
+import { router } from 'expo-router';
 
 
 
@@ -34,4 +34,41 @@ export async function registerPushToken(): Promise<void> {
         onConflict: 'token',
       }
     );
+}
+
+
+export function configurePushNotifications() {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+
+  return Notifications.addNotificationResponseReceivedListener((response) => {
+    const data = response.notification.request.content.data as
+      | {
+          type?: string;
+          callId?: string;
+          conversationId?: string;
+        }
+      | undefined;
+
+    if (
+      data?.type === 'incoming_call' &&
+      typeof data.callId === 'string' &&
+      typeof data.conversationId === 'string'
+    ) {
+      router.push({
+        pathname: '/call/[callId]',
+        params: {
+          callId: data.callId,
+          conversationId: data.conversationId,
+        },
+      });
+    }
+  });
 }

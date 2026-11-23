@@ -172,3 +172,58 @@ export async function getCallWithParticipant(callId: string) {
     },
   };
 }
+
+
+/** Récupère l'historique des appels de l'utilisateur. */
+export async function getCallHistory() {
+  const currentUserId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('calls')
+    .select(
+      `
+      id,
+      conversation_id,
+      caller_id,
+      callee_id,
+      status,
+      created_at,
+      started_at,
+      ended_at,
+      caller:profiles!calls_caller_id_fkey(
+        id,
+        full_name,
+        avatar_url
+      ),
+      callee:profiles!calls_callee_id_fkey(
+        id,
+        full_name,
+        avatar_url
+      )
+    `
+    )
+    .or(`caller_id.eq.${currentUserId},callee_id.eq.${currentUserId}`)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((item) => {
+    const isCaller = item.caller_id === currentUserId;
+    const participantData = isCaller ? item.callee : item.caller;
+    const participant = Array.isArray(participantData)
+      ? participantData[0]
+      : participantData;
+
+    return {
+      id: item.id,
+      conversationId: item.conversation_id,
+      status: item.status,
+      createdAt: item.created_at,
+      startedAt: item.started_at,
+      endedAt: item.ended_at,
+      isIncoming: !isCaller,
+      participantName: participant?.full_name || 'Utilisateur',
+      participantAvatar: participant?.avatar_url || null,
+    };
+  });
+}

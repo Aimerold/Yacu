@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,16 +18,10 @@ import {
   updateCallStatus,
 } from '@/services/call.service';
 
-
-
-
 type Props = {
   call: Call | null;
   onClose: () => void;
 };
-
-
-
 
 export default function IncomingCallModal({
   call,
@@ -64,6 +59,14 @@ export default function IncomingCallModal({
 
     try {
       setHandling(true);
+
+      const { call: currentCall } = await getCallWithParticipant(call.id);
+
+      if (currentCall.status !== 'ringing') {
+        setError('Cet appel n’est plus disponible.');
+        onClose();
+        return;
+      }
 
       await updateCallStatus(call.id, 'accepted');
 
@@ -105,22 +108,16 @@ export default function IncomingCallModal({
     }
   }
 
-
-
-
   return (
     <Modal transparent visible>
       <View style={styles.overlay}>
         <View style={styles.card}>
           <Avatar name={callerName} uri={callerAvatar} size={88} />
 
-
           <Text style={styles.title}>{callerName}</Text>
           <Text style={styles.subtitle}>Appel audio entrant…</Text>
 
-
           {error ? <Text style={styles.error}>{error}</Text> : null}
-
 
           <View style={styles.actions}>
             <Pressable
@@ -154,8 +151,6 @@ export default function IncomingCallModal({
     </Modal>
   );
 }
-
-
 
 const styles = StyleSheet.create({
   overlay: {

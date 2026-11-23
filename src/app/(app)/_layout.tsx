@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import IncomingCallModal from '@/features/calls/components/IncomingCallModal';
 import { useIncomingCalls } from '@/features/calls/hooks/useIncomingCalls';
 import { registerPushToken } from '@/services/push.service';
-
+import { configurePushNotifications } from '@/services/push.service';
 
 
 
@@ -47,6 +47,15 @@ export default function AppLayout() {
     };
   }, []);
 
+
+  useEffect(() => {
+    const subscription = configurePushNotifications();
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   if (authenticated === null) {
     return (
       <View
@@ -69,7 +78,6 @@ export default function AppLayout() {
   return (
     <>
       <Stack screenOptions={{ headerShown: false }} />
-
 
       <IncomingCallModal
         call={incomingCall}
