@@ -11,6 +11,7 @@ module.exports = defineConfig([
     files: ['**/__tests__/**/*.{ts,tsx}', '**/*.test.{ts,tsx}'],
     rules: {
       'import/first': 'off',
+      '@typescript-eslint/no-require-imports': 'off'
     },
   },
 ]);
