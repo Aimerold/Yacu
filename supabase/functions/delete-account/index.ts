@@ -1,3 +1,4 @@
+
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -24,7 +25,7 @@ const PAGE = 100;
 async function removeFolderFiles(
   admin: AdminClient,
   bucket: string,
-  folder: string
+  folder: string,
 ): Promise<void> {
   while (true) {
     const { data, error } = await admin.storage
@@ -50,7 +51,7 @@ async function removeFolderFiles(
 /** Supprime toutes les photos d'une conversation (tous les expéditeurs). */
 async function removeConversationImages(
   admin: AdminClient,
-  conversationId: string
+  conversationId: string,
 ): Promise<void> {
   const { data, error } = await admin.storage
     .from(CHAT_BUCKET)
@@ -62,7 +63,11 @@ async function removeConversationImages(
   const senderFolders = (data ?? []).filter((entry) => entry.id === null);
 
   for (const folder of senderFolders) {
-    await removeFolderFiles(admin, CHAT_BUCKET, `${conversationId}/${folder.name}`);
+    await removeFolderFiles(
+      admin,
+      CHAT_BUCKET,
+      `${conversationId}/${folder.name}`,
+    );
   }
 }
 
@@ -152,14 +157,17 @@ Deno.serve(async (request) => {
     // 4. Photo de profil
     await removeFolderFiles(admin, AVATARS_BUCKET, user.id);
 
-    // 5. Jetons de notification (sans gravité si la table diffère)
+    // 5. Jetons de notification
     const { error: tokensError } = await admin
-      .from('device_tokens')
+      .from('push_tokens')
       .delete()
       .eq('user_id', user.id);
 
     if (tokensError) {
-      console.error('delete-account: jetons non supprimés:', tokensError.message);
+      console.error(
+        'delete-account: jetons non supprimés:',
+        tokensError.message,
+      );
     }
 
     // 6. Profil : supprime en cascade conversations, messages, blocages,

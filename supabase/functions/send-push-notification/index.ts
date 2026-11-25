@@ -1,3 +1,4 @@
+
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -101,7 +102,7 @@ Deno.serve(async (request) => {
       .select('blocker_id')
       .or(
         `and(blocker_id.eq.${recipientId},blocked_id.eq.${message.sender_id}),` +
-          `and(blocker_id.eq.${message.sender_id},blocked_id.eq.${recipientId})`
+          `and(blocker_id.eq.${message.sender_id},blocked_id.eq.${recipientId})`,
       )
       .limit(1);
 
@@ -122,12 +123,12 @@ Deno.serve(async (request) => {
 
     // 6. Appareils du destinataire
     const { data: devices } = await admin
-      .from('device_tokens')
-      .select('expo_push_token')
+      .from('push_tokens')
+      .select('token')
       .eq('user_id', recipientId);
 
     const tokens: string[] = (devices ?? []).map(
-      (device: { expo_push_token: string }) => device.expo_push_token
+      (device: { token: string }) => device.token,
     );
 
     if (tokens.length === 0) {
@@ -137,7 +138,10 @@ Deno.serve(async (request) => {
     // 7. Un seul envoi par message : on « réserve » le message
     const { data: claimed } = await admin
       .from('push_deliveries')
-      .upsert({ message_id: message.id }, { onConflict: 'message_id', ignoreDuplicates: true })
+      .upsert(
+        { message_id: message.id },
+        { onConflict: 'message_id', ignoreDuplicates: true },
+      )
       .select('message_id');
 
     if (!claimed || claimed.length === 0) {
@@ -190,12 +194,12 @@ Deno.serve(async (request) => {
       .filter(
         ({ ticket }) =>
           ticket.status === 'error' &&
-          ticket.details?.error === 'DeviceNotRegistered'
+          ticket.details?.error === 'DeviceNotRegistered',
       )
       .map(({ token }) => token);
 
     if (invalid.length > 0) {
-      await admin.from('device_tokens').delete().in('expo_push_token', invalid);
+      await admin.from('push_tokens').delete().in('token', invalid);
     }
 
     return json({ sent: tickets.filter((t) => t.status === 'ok').length });
@@ -204,4 +208,3 @@ Deno.serve(async (request) => {
     return json({ error: 'push_failed' }, 500);
   }
 });
-

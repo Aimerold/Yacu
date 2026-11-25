@@ -1,0 +1,9 @@
+node_modules
+.expo
+web-build
+android
+ios
+.git
+.gitignore
+*.log
+npm-debug.log*
