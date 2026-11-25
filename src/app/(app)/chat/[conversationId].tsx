@@ -1,3 +1,12 @@
+import CallHistory from '@/features/calls/components/CallHistory';
+import type { ChatMessage } from '@/features/messages/types/chat-message';
+import type { ConversationSummary } from '@/services/conversation.service';
+import {
+  getConversationById,
+  getCurrentUserId,
+} from '@/services/conversation.service';
+import { Ionicons } from '@expo/vector-icons';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,19 +21,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import CallHistory from '@/features/calls/components/CallHistory';
 
+import type { Message } from '@/services/message.service';
 import {
-  getConversationById,
-  getCurrentUserId,
-} from '@/services/conversation.service';
-import type { ConversationSummary } from '@/services/conversation.service';
-
-import {
-  EDIT_WINDOW_MINUTES,
   MESSAGE_MAX_LENGTH,
   MESSAGE_PAGE_SIZE,
   deleteMessage,
@@ -35,8 +35,8 @@ import {
   sendTextMessage,
   subscribeToConversationMessages,
 } from '@/services/message.service';
-import type { Message } from '@/services/message.service';
 
+import type { PreparedImage } from '@/services/media.service';
 import {
   MediaError,
   buildChatImagePath,
@@ -45,7 +45,6 @@ import {
   takePhoto,
   uploadChatImage,
 } from '@/services/media.service';
-import type { PreparedImage } from '@/services/media.service';
 
 import {
   addPendingTextMessage,
@@ -53,136 +52,38 @@ import {
   removePendingTextMessage,
 } from '@/services/offline-messages.service';
 
+import {
+  canActOnMessage,
+  canEditMessage,
+  deliveryOf,
+  editErrorMessage,
+  isPermissionError,
+  upsertMessages,
+} from '@/features/messages/utils/chat-message.utils';
+
 import { isUserBlocked, unblockUser } from '@/services/block.service';
-import type { PeerReceipts } from '@/services/receipt.service';
 
 import { startAudioCall } from '@/services/call.service';
 
+import ConversationHeader from '@/features/messages/components/ConversationHeader';
 import ImageMessage from '@/features/messages/components/ImageMessage';
-import ImageViewerModal from '@/features/messages/components/ImageViewerModal';
 import type { ViewerTarget } from '@/features/messages/components/ImageViewerModal';
+import ImageViewerModal from '@/features/messages/components/ImageViewerModal';
 import MessageActionsModal from '@/features/messages/components/MessageActionsModal';
 import { useConversationLive } from '@/features/messages/hooks/useConversationLive';
 import PresenceLabel from '@/features/presence/components/PresenceLabel';
 import { useContactPresence } from '@/features/presence/hooks/useContactPresence';
-import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { useActiveConversation } from '@/hooks/useActiveConversation';
+import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { generateId } from '@/utils/id';
 import { formatMessageTime } from '@/utils/format';
-import ConversationHeader from '@/features/messages/components/ConversationHeader';
+import { generateId } from '@/utils/id';
 
 const KEYBOARD_BEHAVIOR: 'padding' | undefined = 'padding';
 
 const MIN_INPUT_HEIGHT = 44;
 const MAX_INPUT_HEIGHT = 132;
 const INPUT_VERTICAL_PADDING = 20;
-const EDIT_WINDOW_MS = EDIT_WINDOW_MINUTES * 60 * 1000;
-
-type ChatMessage = Message & {
-  status: 'sent' | 'pending' | 'failed';
-  localUri?: string;
-};
-
-function timeOf(message: ChatMessage): number {
-  const value = Date.parse(message.created_at);
-  return Number.isNaN(value) ? 0 : value;
-}
-
-function upsertMessages(
-  list: ChatMessage[],
-  incoming: ChatMessage[]
-): ChatMessage[] {
-  const byId = new Map(
-    list.map((message) => [message.id, message])
-  );
-
-  for (const message of incoming) {
-    const existing = byId.get(message.id);
-
-    byId.set(message.id, {
-      ...message,
-      localUri: message.localUri ?? existing?.localUri,
-    });
-  }
-
-  return Array.from(byId.values()).sort(
-    (a, b) => timeOf(b) - timeOf(a)
-  );
-}
-
-function isPermissionError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    error.message.toLowerCase().includes('row-level security')
-  );
-}
-
-function canEditMessage(
-  message: ChatMessage,
-  myId: string | null
-): boolean {
-  return (
-    !!myId &&
-    message.sender_id === myId &&
-    message.type === 'text' &&
-    message.status === 'sent' &&
-    !message.deleted_at &&
-    Date.now() - Date.parse(message.created_at) <=
-      EDIT_WINDOW_MS
-  );
-}
-
-function canActOnMessage(
-  message: ChatMessage,
-  myId: string | null
-): boolean {
-  if (!myId || message.sender_id !== myId || message.deleted_at) {
-    return false;
-  }
-
-  return message.status === 'sent' || message.status === 'failed';
-}
-
-function deliveryOf(
-  message: ChatMessage,
-  receipts: PeerReceipts | null
-): 'sent' | 'delivered' | 'read' {
-  if (!receipts) return 'sent';
-
-  const created = Date.parse(message.created_at);
-
-  if (receipts.readAt !== null && receipts.readAt >= created) {
-    return 'read';
-  }
-
-  if (
-    receipts.deliveredAt !== null &&
-    receipts.deliveredAt >= created
-  ) {
-    return 'delivered';
-  }
-
-  return 'sent';
-}
-
-function editErrorMessage(error: unknown): string {
-  const text = error instanceof Error ? error.message : '';
-
-  if (text.includes('edit_window_expired')) {
-    return `Le délai de modification (${EDIT_WINDOW_MINUTES} minutes) est dépassé.`;
-  }
-
-  if (text.includes('forbidden')) {
-    return 'Tu ne peux pas modifier ce message.';
-  }
-
-  if (text.includes('not_editable')) {
-    return 'Ce message ne peut plus être modifié.';
-  }
-
-  return 'Impossible de modifier le message. Réessaie.';
-}
 
 export default function ConversationScreen() {
   const router = useRouter();
@@ -244,7 +145,10 @@ export default function ConversationScreen() {
   );
 
   const messagesRef = useRef<ChatMessage[]>([]);
-  messagesRef.current = messages;
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const pendingImages = useRef(
     new Map<string, PreparedImage>()
@@ -994,7 +898,7 @@ export default function ConversationScreen() {
             hitSlop={8}
           >
             <Text style={styles.failed}>
-              Échec de l'envoi · Réessayer
+              Échec de l&apos;envoi · Réessayer
             </Text>
           </Pressable>
         )}
@@ -1005,7 +909,7 @@ export default function ConversationScreen() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      
+
       <CallHistory conversationId={conversationId} />
 
       <ConversationHeader

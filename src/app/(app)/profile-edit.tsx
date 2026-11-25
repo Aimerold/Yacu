@@ -1,3 +1,9 @@
+import type { Profile } from '@/services/profile.service';
+import {
+  getMyProfile,
+  updateMyProfile,
+} from '@/services/profile.service';
+import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,12 +16,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
-import {
-  getMyProfile,
-  updateMyProfile,
-} from '@/services/profile.service';
-import type { Profile } from '@/services/profile.service';
 
 const DISPLAY_NAME_MAX = 50;
 const BIO_MAX = 160;
@@ -209,7 +209,7 @@ export default function ProfileEditScreen() {
           <Text style={styles.error}>{error}</Text>
         ) : (
           <View>
-            <Text style={styles.label}>Nom d'affichage</Text>
+            <Text style={styles.label}>Nom d&apos;affichage</Text>
 
             <TextInput
               style={styles.input}
@@ -220,7 +220,7 @@ export default function ProfileEditScreen() {
               placeholderTextColor="#8493A8"
             />
 
-            <Text style={styles.label}>Nom d'utilisateur</Text>
+            <Text style={styles.label}>Nom d&apos;utilisateur</Text>
 
             <TextInput
               style={styles.input}

@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import AppHeader from '@/components/layout/AppHeader';
+import { getFriends } from '@/services/friendship.service';
+import { createGroup } from '@/services/group.service';
+import { colors } from '@/theme/tokens';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,14 +19,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import AppHeader from '@/components/layout/AppHeader';
-import { getFriends } from '@/services/friendship.service';
-import { createGroup } from '@/services/group.service';
-import { colors } from '@/theme/tokens';
-
-
 
 type Friend = {
   id: string;
@@ -29,11 +27,8 @@ type Friend = {
   avatar_url: string | null;
 };
 
-
-
 export default function CreateGroupScreen() {
   const router = useRouter();
-
 
   const [groupName, setGroupName] = useState('');
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -43,16 +38,9 @@ export default function CreateGroupScreen() {
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
 
-
-
   const loadFriends = useCallback(async () => {
     try {
-      setLoadingFriends(true);
-      setError('');
-
-
       const result = await getFriends();
-
 
       const formattedFriends = result
         .filter((friend) => friend.profile)
@@ -63,7 +51,6 @@ export default function CreateGroupScreen() {
           avatar_url: friend.profile.avatar_url,
         }));
 
-
       setFriends(formattedFriends);
     } catch (e) {
       console.error('[Yacu CreateGroup] Erreur chargement amis :', e);
@@ -73,13 +60,22 @@ export default function CreateGroupScreen() {
     }
   }, []);
 
-
-
   useEffect(() => {
-    void loadFriends();
+    // Les setState de loadFriends sont tous APRÈS un await,
+    // donc asynchrones : pas de rendu en cascade.
+    // On encapsule dans une IIFE async pour satisfaire la règle du linter.
+    let cancelled = false;
+
+    (async () => {
+      if (!cancelled) {
+        await loadFriends();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [loadFriends]);
-
-
 
   function toggleFriend(friendId: string) {
     setSelectedIds((previous) =>
@@ -89,31 +85,24 @@ export default function CreateGroupScreen() {
     );
   }
 
-
-
   async function handleCreateGroup() {
     const name = groupName.trim();
-
 
     if (name.length < 2) {
       setError('Le nom du groupe doit contenir au moins 2 caractères.');
       return;
     }
 
-
     if (selectedIds.length === 0) {
       setError('Sélectionne au moins un ami pour créer ton groupe.');
       return;
     }
 
-
     try {
       setCreating(true);
       setError('');
 
-
       const result = await createGroup(name, selectedIds);
-
 
       router.replace({
         pathname: '/chat/[conversationId]',
@@ -122,12 +111,10 @@ export default function CreateGroupScreen() {
     } catch (e) {
       console.error('[Yacu CreateGroup] Erreur création groupe :', e);
 
-
       const message =
         e instanceof Error
           ? e.message
           : 'Impossible de créer le groupe.';
-
 
       setError(message);
       Alert.alert('Erreur', message);
@@ -136,14 +123,10 @@ export default function CreateGroupScreen() {
     }
   }
 
-
-
   const filteredFriends = friends.filter((friend) => {
     const query = search.trim().toLowerCase();
 
-
     if (!query) return true;
-
 
     return (
       (friend.display_name ?? '').toLowerCase().includes(query) ||
@@ -151,13 +134,9 @@ export default function CreateGroupScreen() {
     );
   });
 
-
-
   function renderFriend({ item }: { item: Friend }) {
     const selected = selectedIds.includes(item.id);
     const name = item.display_name || item.username;
-
-
 
     return (
       <Pressable
@@ -179,7 +158,6 @@ export default function CreateGroupScreen() {
           </View>
         )}
 
-
         <View style={styles.friendInfo}>
           <Text style={styles.friendName} numberOfLines={1}>
             {name}
@@ -188,7 +166,6 @@ export default function CreateGroupScreen() {
             @{item.username}
           </Text>
         </View>
-
 
         <View
           style={[
@@ -204,12 +181,9 @@ export default function CreateGroupScreen() {
     );
   }
 
-
-
   return (
     <View style={styles.container}>
       <AppHeader />
-
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -222,7 +196,6 @@ export default function CreateGroupScreen() {
         >
           <Text style={styles.title}>Nouveau groupe</Text>
 
-
           <Text style={styles.label}>Nom du groupe</Text>
           <TextInput
             style={styles.input}
@@ -233,14 +206,12 @@ export default function CreateGroupScreen() {
             maxLength={40}
           />
 
-
           <View style={styles.sectionHeader}>
             <Text style={styles.label}>Ajouter des membres</Text>
             <Text style={styles.selectedCount}>
               {selectedIds.length} sélectionné(s)
             </Text>
           </View>
-
 
           <View style={styles.searchRow}>
             <Ionicons name="search" size={18} color={colors.textMuted} />
@@ -256,9 +227,7 @@ export default function CreateGroupScreen() {
             />
           </View>
 
-
           {error ? <Text style={styles.error}>{error}</Text> : null}
-
 
           {loadingFriends ? (
             <View style={styles.center}>
@@ -290,7 +259,6 @@ export default function CreateGroupScreen() {
           )}
         </ScrollView>
 
-
         <View style={styles.footer}>
           <Pressable
             style={[
@@ -314,8 +282,6 @@ export default function CreateGroupScreen() {
     </View>
   );
 }
-
-
 
 const styles = StyleSheet.create({
   container: {

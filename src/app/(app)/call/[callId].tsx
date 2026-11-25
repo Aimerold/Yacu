@@ -1,4 +1,3 @@
-
 import Avatar from '@/components/ui/Avatar';
 
 import {
@@ -101,9 +100,6 @@ export default function CallScreen() {
     if (!callId || !conversationId) return;
 
     try {
-      setConnecting(true);
-      setError('');
-
       // 1. Vérifier que l'appel existe et récupérer le participant
       const { call, participant } =
         await getCallWithParticipant(callId);
@@ -174,7 +170,6 @@ export default function CallScreen() {
 
       setMuted(false);
       setConnected(true);
-
     } catch (e) {
       const message =
         e instanceof Error
@@ -202,7 +197,6 @@ export default function CallScreen() {
           // Ignorer les erreurs de nettoyage audio
         }
       }
-
     } finally {
       if (mountedRef.current) {
         setConnecting(false);
@@ -210,13 +204,16 @@ export default function CallScreen() {
     }
   }, [callId, conversationId, room]);
 
-  /**
-   * Démarrer la connexion à l'ouverture de l'écran.
-   */
-  useEffect(() => {
+ /**
+ * Démarrer la connexion à l'ouverture de l'écran.
+ */
+useEffect(() => {
+  const timer = setTimeout(() => {
     void startCall();
-  }, [startCall]);
+  }, 0);
 
+  return () => clearTimeout(timer);
+}, [startCall]);
   /**
    * Gestion de la déconnexion LiveKit.
    */
@@ -359,7 +356,6 @@ export default function CallScreen() {
       );
 
       setMuted(nextMuted);
-
     } catch {
       setError(
         'Impossible de modifier le microphone.'
@@ -386,7 +382,6 @@ export default function CallScreen() {
       await room.disconnect();
 
       exitScreen();
-
     } catch (e) {
       const message =
         e instanceof Error
@@ -394,7 +389,6 @@ export default function CallScreen() {
           : "Impossible de terminer l'appel.";
 
       setError(message);
-
     } finally {
       if (mountedRef.current) {
         setEnding(false);
@@ -463,7 +457,6 @@ export default function CallScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.center}>
-
         <Avatar
           name={participantName}
           uri={participantAvatar}
@@ -501,7 +494,6 @@ export default function CallScreen() {
 
         {/* Commandes de l'appel */}
         <View style={styles.actions}>
-
           {/* Bouton microphone */}
           <Pressable
             style={[
@@ -543,7 +535,6 @@ export default function CallScreen() {
               />
             )}
           </Pressable>
-
         </View>
       </View>
     </View>

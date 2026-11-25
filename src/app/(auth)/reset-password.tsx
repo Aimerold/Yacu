@@ -1,3 +1,10 @@
+import {
+  AccountError,
+  PASSWORD_MIN_LENGTH,
+  requestPasswordReset,
+  resetPasswordWithCode,
+} from '@/services/auth.service';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,13 +17,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-  AccountError,
-  PASSWORD_MIN_LENGTH,
-  requestPasswordReset,
-  resetPasswordWithCode,
-} from '@/services/auth.service';
 
 const RESEND_DELAY_SECONDS = 60;
 
@@ -115,7 +115,7 @@ export default function ResetPasswordScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>Lien invalide</Text>
           <Text style={styles.subtitle}>
-            Recommence la procédure depuis l'écran de connexion.
+            Recommence la procédure depuis l&apos;écran de connexion.
           </Text>
           <Pressable style={styles.button} onPress={() => router.back()}>
             <Text style={styles.buttonText}>Retour</Text>
@@ -141,7 +141,7 @@ export default function ResetPasswordScreen() {
 
         <Text style={styles.title}>Nouveau mot de passe</Text>
         <Text style={styles.subtitle}>
-          Si un compte existe pour {email}, un code vient d'y être envoyé.
+          Si un compte existe pour {email}, un code vient d&apos;y être envoyé.
           Saisis-le ci-dessous, puis choisis ton nouveau mot de passe.
         </Text>
 

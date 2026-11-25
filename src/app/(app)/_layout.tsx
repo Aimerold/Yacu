@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { Redirect, Stack } from 'expo-router';
-import { supabase } from '@/lib/supabase';
 import IncomingCallModal from '@/features/calls/components/IncomingCallModal';
 import { useIncomingCalls } from '@/features/calls/hooks/useIncomingCalls';
-import { registerPushToken } from '@/services/push.service';
-import { configurePushNotifications } from '@/services/push.service';
-
-
+import { supabase } from '@/lib/supabase';
+import {
+  configurePushNotifications,
+  registerPushToken,
+} from '@/services/push.service';
+import { Redirect, Stack } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 
 export default function AppLayout() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
@@ -46,7 +46,6 @@ export default function AppLayout() {
       listener.subscription.unsubscribe();
     };
   }, []);
-
 
   useEffect(() => {
     const subscription = configurePushNotifications();

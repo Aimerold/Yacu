@@ -31,24 +31,53 @@ export function useUserSettings() {
     if (mountedRef.current) setSettings(next);
   }, []);
 
+  const fetchSettings = useCallback(async () => {
+    const userId = await getCurrentUserId();
+    const next = await ensureUserSettings(userId);
+    return { userId, settings: next };
+  }, []);
+
   const reload = useCallback(async () => {
     setLoading(true);
     setError('');
 
     try {
-      const userId = await getCurrentUserId();
+      const { userId, settings } = await fetchSettings();
       userIdRef.current = userId;
-      apply(await ensureUserSettings(userId));
+      apply(settings);
     } catch {
       if (mountedRef.current) setError('Impossible de charger tes réglages.');
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [apply]);
+  }, [apply, fetchSettings]);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    let active = true;
+
+    const load = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const { userId, settings } = await fetchSettings();
+        if (!active) return;
+        userIdRef.current = userId;
+        settingsRef.current = settings;
+        setSettings(settings);
+      } catch {
+        if (active) setError('Impossible de charger tes réglages.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, [fetchSettings]);
 
   /** Applique tout de suite le changement, puis l'enregistre ; annule en cas d'échec. */
   const update = useCallback(

@@ -22,57 +22,108 @@ export default function ImageMessage({
   onOpen,
   onLongPress,
 }: Props) {
-  const [url, setUrl] = useState<string | null>(localUri ?? null);
+  if (localUri) {
+    return (
+      <ImageMessageImage
+        key={localUri}
+        uri={localUri}
+        onOpen={onOpen}
+        onLongPress={onLongPress}
+      />
+    );
+  }
+
+  if (mediaPath) {
+    return (
+      <SignedImageMessage
+        key={mediaPath}
+        mediaPath={mediaPath}
+        onOpen={onOpen}
+        onLongPress={onLongPress}
+      />
+    );
+  }
+
+  return <ImageMessagePlaceholder kind="error" />;
+}
+
+function SignedImageMessage({
+  mediaPath,
+  onOpen,
+  onLongPress,
+}: Omit<Props, 'localUri'> & { mediaPath: string }) {
+  const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
 
-    if (localUri) {
-      setUrl(localUri);
-    } else if (mediaPath) {
-      getSignedImageUrl(mediaPath)
-        .then((signed) => {
-          if (active) {
-            setUrl(signed);
-            setFailed(false);
-          }
-        })
-        .catch(() => {
-          if (active) setFailed(true);
-        });
-    }
+    getSignedImageUrl(mediaPath)
+      .then((signed) => {
+        if (active) {
+          setUrl(signed);
+          setFailed(false);
+        }
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
 
     return () => {
       active = false;
     };
-  }, [mediaPath, localUri]);
+  }, [mediaPath]);
 
-  if (failed) {
-    return (
-      <View style={styles.placeholder}>
-        <Text style={styles.placeholderText}>Image indisponible</Text>
-      </View>
-    );
+  if (failed || !url) {
+    return <ImageMessagePlaceholder kind={failed ? 'error' : 'loading'} />;
   }
 
-  if (!url) {
-    return (
-      <View style={styles.placeholder}>
-        <ActivityIndicator color="#FF8A32" />
-      </View>
-    );
+  return (
+    <ImageMessageImage
+      key={url}
+      uri={url}
+      onOpen={onOpen}
+      onLongPress={onLongPress}
+    />
+  );
+}
+
+function ImageMessageImage({
+  uri,
+  onOpen,
+  onLongPress,
+}: {
+  uri: string;
+  onOpen: () => void;
+  onLongPress?: () => void;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return <ImageMessagePlaceholder kind="error" />;
   }
 
   return (
     <Pressable onPress={onOpen} onLongPress={onLongPress} delayLongPress={350}>
       <Image
-        source={{ uri: url }}
+        source={{ uri }}
         style={styles.image}
         resizeMode="cover"
         onError={() => setFailed(true)}
       />
     </Pressable>
+  );
+}
+
+function ImageMessagePlaceholder({ kind }: { kind: 'loading' | 'error' }) {
+  return (
+    <View style={styles.placeholder}>
+      {kind === 'error' ? (
+        <Text style={styles.placeholderText}>Image indisponible</Text>
+      ) : (
+        <ActivityIndicator color="#FF8A32" />
+      )}
+    </View>
   );
 }
 

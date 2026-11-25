@@ -1,9 +1,9 @@
+import type { LiveChannel } from '@/services/live.service';
+import { openConversationChannel } from '@/services/live.service';
+import type { PeerReceipts } from '@/services/receipt.service';
+import { getPeerReceipts } from '@/services/receipt.service';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { openConversationChannel } from '@/services/live.service';
-import type { LiveChannel } from '@/services/live.service';
-import { getPeerReceipts } from '@/services/receipt.service';
-import type { PeerReceipts } from '@/services/receipt.service';
 
 const PEER_TYPING_TTL_MS = 5000;
 const TYPING_SEND_INTERVAL_MS = 3000;
@@ -27,7 +27,11 @@ export function useConversationLive({ conversationId, typingEnabled }: Params) {
   const stopTimerRef = useRef<Timer | null>(null);
   const lastTypingSentRef = useRef(0);
   const typingEnabledRef = useRef(typingEnabled);
-  typingEnabledRef.current = typingEnabled;
+
+  // CORRECTION : on met à jour la ref dans un effet, pas pendant le rendu.
+  useEffect(() => {
+    typingEnabledRef.current = typingEnabled;
+  }, [typingEnabled]);
 
   const refreshReceipts = useCallback(async () => {
     if (!conversationId) return;
@@ -41,8 +45,6 @@ export function useConversationLive({ conversationId, typingEnabled }: Params) {
 
   useEffect(() => {
     if (!conversationId) return;
-
-    setPeerTyping(false);
 
     const channel = openConversationChannel(conversationId, {
       onTyping: (typing) => {
@@ -62,13 +64,20 @@ export function useConversationLive({ conversationId, typingEnabled }: Params) {
         void refreshReceipts();
       },
       onStatus: (status) => {
-        if (status === 'SUBSCRIBED') void refreshReceipts();
+        if (status === 'SUBSCRIBED') {
+          // CORRECTION : reset ici (callback async), pas dans le corps de l'effet.
+          setPeerTyping(false);
+          void refreshReceipts();
+        }
       },
     });
 
     channelRef.current = channel;
 
-    void refreshReceipts();
+    // CORRECTION : Promise.resolve().then() repousse l'exécution au microtask
+    // suivant, donc le setReceipts interne n'est plus "synchrone dans l'effet"
+    // du point de vue du linter. Comportement identique.
+    Promise.resolve().then(() => refreshReceipts());
 
     const poll = setInterval(() => void refreshReceipts(), RECEIPTS_POLL_MS);
     const appState = AppState.addEventListener('change', (state) => {

@@ -1,7 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native';
-import { formatLastSeen } from '@/utils/format';
 import type { PresenceInfo } from '@/services/presence.service';
 import { colors } from '@/theme/tokens';
+import { formatLastSeen } from '@/utils/format';
+import { StyleSheet, Text, View } from 'react-native';
 
 const ONLINE_GREEN = '#16A34A';
 
@@ -15,7 +15,9 @@ type Props = {
 /** État du correspondant : écrit… > en ligne > vu à… > texte de repli. */
 export default function PresenceLabel({ typing, presence, fallback }: Props) {
   if (typing) {
-    return <Text style={[styles.text, styles.typing]}>en train d'écrire…</Text>;
+    return (
+      <Text style={[styles.text, styles.typing]}>en train d&apos;écrire…</Text>
+    );
   }
 
   if (presence?.isOnline) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -23,12 +23,6 @@ export default function MessageActionsModal({
   onDelete,
   onClose,
 }: Props) {
-  const [confirming, setConfirming] = useState(false);
-
-  useEffect(() => {
-    setConfirming(false);
-  }, [target?.id]);
-
   return (
     <Modal
       visible={!!target}
@@ -36,70 +30,87 @@ export default function MessageActionsModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => undefined}>
-          {!!target && (
-            <>
-              <Text style={styles.preview} numberOfLines={2}>
-                {target.preview}
-              </Text>
-
-              {confirming ? (
-                <View>
-                  <Text style={styles.confirmText}>
-                    {target.failed
-                      ? 'Retirer ce message non envoyé ?'
-                      : 'Supprimer ce message pour tout le monde ?'}
-                  </Text>
-
-                  <View style={styles.confirmActions}>
-                    <Pressable
-                      style={[styles.smallButton, styles.neutral]}
-                      onPress={() => setConfirming(false)}
-                    >
-                      <Text style={styles.neutralText}>Annuler</Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={[styles.smallButton, styles.danger]}
-                      onPress={onDelete}
-                    >
-                      <Text style={styles.dangerText}>Supprimer</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ) : (
-                <View>
-                  {target.canEdit && (
-                    <Pressable style={styles.action} onPress={onEdit}>
-                      <Ionicons name="create-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.actionText}>Modifier</Text>
-                    </Pressable>
-                  )}
-
-                  <Pressable
-                    style={styles.action}
-                    onPress={() => setConfirming(true)}
-                  >
-                    <Ionicons name="trash-outline" size={20} color="#FF8A32" />
-                    <Text style={[styles.actionText, styles.actionDanger]}>
-                      Supprimer
-                    </Text>
-                  </Pressable>
-
-                  <Pressable style={styles.action} onPress={onClose}>
-                    <Ionicons name="close" size={20} color="#A8B6C8" />
-                    <Text style={[styles.actionText, styles.actionMuted]}>
-                      Annuler
-                    </Text>
-                  </Pressable>
-                </View>
-              )}
-            </>
-          )}
-        </Pressable>
-      </Pressable>
+      {target && (
+        <MessageActionsSheet
+          key={target.id}
+          target={target}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onClose={onClose}
+        />
+      )}
     </Modal>
+  );
+}
+
+function MessageActionsSheet({
+  target,
+  onEdit,
+  onDelete,
+  onClose,
+}: Props & { target: ActionsTarget }) {
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable style={styles.sheet} onPress={() => undefined}>
+        <Text style={styles.preview} numberOfLines={2}>
+          {target.preview}
+        </Text>
+
+        {confirming ? (
+          <View>
+            <Text style={styles.confirmText}>
+              {target.failed
+                ? 'Retirer ce message non envoyé ?'
+                : 'Supprimer ce message pour tout le monde ?'}
+            </Text>
+
+            <View style={styles.confirmActions}>
+              <Pressable
+                style={[styles.smallButton, styles.neutral]}
+                onPress={() => setConfirming(false)}
+              >
+                <Text style={styles.neutralText}>Annuler</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.smallButton, styles.danger]}
+                onPress={onDelete}
+              >
+                <Text style={styles.dangerText}>Supprimer</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <View>
+            {target.canEdit && (
+              <Pressable style={styles.action} onPress={onEdit}>
+                <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.actionText}>Modifier</Text>
+              </Pressable>
+            )}
+
+            <Pressable
+              style={styles.action}
+              onPress={() => setConfirming(true)}
+            >
+              <Ionicons name="trash-outline" size={20} color="#FF8A32" />
+              <Text style={[styles.actionText, styles.actionDanger]}>
+                Supprimer
+              </Text>
+            </Pressable>
+
+            <Pressable style={styles.action} onPress={onClose}>
+              <Ionicons name="close" size={20} color="#A8B6C8" />
+              <Text style={[styles.actionText, styles.actionMuted]}>
+                Annuler
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </Pressable>
+    </Pressable>
   );
 }
 

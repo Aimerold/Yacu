@@ -1,3 +1,6 @@
+import type { BlockedUser } from '@/services/block.service';
+import { getBlockedUsers, unblockUser } from '@/services/block.service';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -7,10 +10,26 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import Avatar from '@/components/ui/Avatar';
-import { getBlockedUsers, unblockUser } from '@/services/block.service';
-import type { BlockedUser } from '@/services/block.service';
+
+function getUserLabel(user: BlockedUser): string {
+  if (
+    'display_name' in user &&
+    typeof user.display_name === 'string' &&
+    user.display_name.trim()
+  ) {
+    return user.display_name;
+  }
+
+  if (
+    'username' in user &&
+    typeof user.username === 'string' &&
+    user.username.trim()
+  ) {
+    return user.username;
+  }
+
+  return user.id;
+}
 
 export default function BlockedUsersScreen() {
   const router = useRouter();
@@ -33,9 +52,13 @@ export default function BlockedUsersScreen() {
             setError('');
           }
         } catch {
-          if (active) setError('Impossible de charger la liste.');
+          if (active) {
+            setError('Impossible de charger la liste.');
+          }
         } finally {
-          if (active) setLoading(false);
+          if (active) {
+            setLoading(false);
+          }
         }
       }
 
@@ -55,7 +78,9 @@ export default function BlockedUsersScreen() {
 
     try {
       await unblockUser(userId);
-      setUsers((previous) => previous.filter((user) => user.id !== userId));
+      setUsers((previous) =>
+        previous.filter((user) => user.id !== userId)
+      );
     } catch {
       setError('Impossible de débloquer cet utilisateur. Réessaie.');
     } finally {
@@ -67,52 +92,52 @@ export default function BlockedUsersScreen() {
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <Pressable onPress={() => router.back()} hitSlop={12}>
-        <Text style={styles.back}>← Retour</Text>
+      <Pressable
+        onPress={() => router.back()}
+        hitSlop={12}
+        style={styles.backButton}
+      >
+        <Text style={styles.back}>←</Text>
       </Pressable>
 
       <Text style={styles.title}>Utilisateurs bloqués</Text>
 
-      {!!error && <Text style={styles.error}>{error}</Text>}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {loading ? (
-        <ActivityIndicator color="#FF8A32" size="large" style={styles.loader} />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#FF8A32" />
+        </View>
       ) : (
         <FlatList
           data={users}
           keyExtractor={(item) => item.id}
           contentContainerStyle={
-            users.length === 0 ? styles.emptyContainer : undefined
-          }
-          ListEmptyComponent={
-            <Text style={styles.empty}>Tu n'as bloqué personne.</Text>
+            users.length === 0 ? styles.emptyList : styles.list
           }
           renderItem={({ item }) => {
-            const name = item.display_name || item.username;
+            const label = getUserLabel(item);
+            const isBusy = busyId === item.id;
 
             return (
               <View style={styles.row}>
-                <Avatar name={name} uri={item.avatar_url} size={44} />
-
-                <View style={styles.info}>
-                  <Text style={styles.name} numberOfLines={1}>
-                    {name}
-                  </Text>
-                  <Text style={styles.username} numberOfLines={1}>
-                    @{item.username}
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName} numberOfLines={1}>
+                    {label}
                   </Text>
                 </View>
 
                 <Pressable
-                  style={[
-                    styles.unblockButton,
-                    busyId === item.id && styles.disabled,
-                  ]}
                   onPress={() => handleUnblock(item.id)}
-                  disabled={!!busyId}
+                  disabled={isBusy}
+                  style={({ pressed }) => [
+                    styles.unblockButton,
+                    pressed && styles.unblockButtonPressed,
+                    isBusy && styles.unblockButtonDisabled,
+                  ]}
                 >
-                  {busyId === item.id ? (
-                    <ActivityIndicator color="#FFFFFF" />
+                  {isBusy ? (
+                    <ActivityIndicator size="small" color="#FF8A32" />
                   ) : (
                     <Text style={styles.unblockText}>Débloquer</Text>
                   )}
@@ -120,6 +145,16 @@ export default function BlockedUsersScreen() {
               </View>
             );
           }}
+          ListEmptyComponent={
+            <View style={styles.centered}>
+              <Text style={styles.emptyTitle}>
+                {"Aucun utilisateur bloqué pour l'instant."}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                Les personnes que tu bloques apparaîtront ici.
+              </Text>
+            </View>
+          }
         />
       )}
     </View>
@@ -129,70 +164,89 @@ export default function BlockedUsersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#081426',
-    padding: 24,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
     paddingTop: 60,
   },
+  backButton: {
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+  },
   back: {
-    color: '#FF8A32',
-    fontSize: 16,
-    marginBottom: 30,
+    fontSize: 28,
+    color: '#111111',
   },
   title: {
-    color: '#FFFFFF',
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
+    color: '#111111',
     marginBottom: 20,
   },
-  loader: {
-    marginTop: 30,
-  },
   error: {
-    color: '#FF8A32',
-    marginBottom: 14,
+    color: '#D93025',
+    fontSize: 14,
+    marginBottom: 12,
   },
-  emptyContainer: {
-    flexGrow: 1,
+  centered: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 24,
   },
-  empty: {
-    color: '#A8B6C8',
-    textAlign: 'center',
+  list: {
+    paddingBottom: 32,
+  },
+  emptyList: {
+    flexGrow: 1,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#10223A',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    gap: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E5E5',
   },
-  info: {
+  userInfo: {
     flex: 1,
+    marginRight: 12,
   },
-  name: {
-    color: '#FFFFFF',
-    fontSize: 15,
+  userName: {
+    fontSize: 16,
     fontWeight: '600',
-  },
-  username: {
-    color: '#A8B6C8',
-    marginTop: 2,
+    color: '#111111',
   },
   unblockButton: {
-    backgroundColor: '#263A54',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    minWidth: 92,
+    minWidth: 96,
+    minHeight: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: '#FF8A32',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
   },
-  disabled: {
-    opacity: 0.6,
+  unblockButtonPressed: {
+    opacity: 0.7,
+  },
+  unblockButtonDisabled: {
+    opacity: 0.5,
   },
   unblockText: {
-    color: '#FFFFFF',
+    color: '#FF8A32',
+    fontSize: 14,
     fontWeight: '600',
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#111111',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
   },
 });

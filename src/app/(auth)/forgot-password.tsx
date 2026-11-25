@@ -1,3 +1,9 @@
+import {
+  AccountError,
+  isValidEmail,
+  requestPasswordReset,
+} from '@/services/auth.service';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -8,14 +14,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import {
-  AccountError,
-  isValidEmail,
-  requestPasswordReset,
-} from '@/services/auth.service';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -67,7 +66,7 @@ export default function ForgotPasswordScreen() {
 
         <Text style={styles.title}>Mot de passe oublié</Text>
         <Text style={styles.subtitle}>
-          Saisis l'adresse e-mail de ton compte. Nous t'enverrons un code pour
+          Saisis l&apos;adresse e-mail de ton compte. Nous t&apos;enverrons un code pour
           choisir un nouveau mot de passe.
         </Text>
 

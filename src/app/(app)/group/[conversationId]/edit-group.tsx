@@ -1,3 +1,8 @@
+import AppHeader from '@/components/layout/AppHeader';
+import { getGroupById } from '@/services/conversation.service';
+import { updateGroup } from '@/services/group.service';
+import { colors } from '@/theme/tokens';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,13 +16,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import AppHeader from '@/components/layout/AppHeader';
-import { updateGroup } from '@/services/group.service';
-import { getGroupById } from '@/services/conversation.service';
-import { colors } from '@/theme/tokens';
-
-
 
 export default function EditGroupScreen() {
   const router = useRouter();
@@ -25,78 +23,76 @@ export default function EditGroupScreen() {
     conversationId: string;
   }>();
 
-
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-
-
   const load = useCallback(async () => {
-    if (!conversationId) return;
-
-
-    try {
-      setLoading(true);
-      setError('');
-
-
-      const group = await getGroupById(conversationId);
-
-
-      if (!group) {
-        setError('Groupe introuvable ou accès refusé.');
-        return;
-      }
-
-
-      setName(group.name ?? '');
-    } catch (e) {
-      const message =
-        e instanceof Error ? e.message : 'Impossible de charger le groupe.';
-
-
-      setError(message);
-    } finally {
-      setLoading(false);
+    if (!conversationId) {
+      throw new Error('Identifiant du groupe introuvable.');
     }
+
+    const group = await getGroupById(conversationId);
+
+    if (!group) {
+      throw new Error('Groupe introuvable ou accès refusé.');
+    }
+
+    return group.name ?? '';
   }, [conversationId]);
 
-
-
   useEffect(() => {
-    void load();
+    let active = true;
+
+    load()
+      .then((groupName) => {
+        if (active) {
+          setName(groupName);
+          setError('');
+        }
+      })
+      .catch((e: unknown) => {
+        if (!active) return;
+
+        const message =
+          e instanceof Error
+            ? e.message
+            : 'Impossible de charger le groupe.';
+
+        setError(message);
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, [load]);
-
-
 
   async function handleSave() {
     if (!conversationId) return;
 
-
     const trimmedName = name.trim();
-
 
     if (trimmedName.length < 2) {
       setError('Le nom du groupe doit contenir au moins 2 caractères.');
       return;
     }
 
-
     try {
       setSaving(true);
       setError('');
 
-
       await updateGroup(conversationId, trimmedName, null);
-
 
       router.back();
     } catch (e) {
       const message =
         e instanceof Error ? e.message : 'Impossible de modifier le groupe.';
-
 
       setError(message);
       Alert.alert('Erreur', message);
@@ -105,12 +101,9 @@ export default function EditGroupScreen() {
     }
   }
 
-
-
   return (
     <View style={styles.container}>
       <AppHeader />
-
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -122,7 +115,6 @@ export default function EditGroupScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.title}>Modifier le groupe</Text>
-
 
           {loading ? (
             <ActivityIndicator color={colors.accent} size="large" />
@@ -138,9 +130,7 @@ export default function EditGroupScreen() {
                 maxLength={50}
               />
 
-
               {error ? <Text style={styles.error}>{error}</Text> : null}
-
 
               <Pressable
                 style={[styles.saveButton, saving && styles.disabledButton]}
@@ -161,8 +151,6 @@ export default function EditGroupScreen() {
     </View>
   );
 }
-
-
 
 const styles = StyleSheet.create({
   container: {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/tokens';
 
@@ -8,30 +8,58 @@ type Props = {
   size?: number;
 };
 
+type CommonProps = {
+  name: string;
+  size: number;
+  radius: number;
+};
+
 /** Photo de profil, ou initiale du nom si aucune photo n'est disponible. */
 export default function Avatar({ name, uri, size = 44 }: Props) {
-  const [failed, setFailed] = useState(false);
   const radius = size / 2;
 
-  useEffect(() => {
-    setFailed(false);
-  }, [uri]);
-
-  if (uri && !failed) {
+  if (uri) {
     return (
-      <Image
-        source={{ uri }}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: radius,
-          backgroundColor: colors.border,
-        }}
-        onError={() => setFailed(true)}
+      <AvatarImage
+        key={uri}
+        name={name}
+        size={size}
+        radius={radius}
+        uri={uri}
       />
     );
   }
 
+  return <AvatarFallback name={name} size={size} radius={radius} />;
+}
+
+function AvatarImage({
+  name,
+  radius,
+  size,
+  uri,
+}: CommonProps & { uri: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return <AvatarFallback name={name} size={size} radius={radius} />;
+  }
+
+  return (
+    <Image
+      source={{ uri }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        backgroundColor: colors.border,
+      }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function AvatarFallback({ name, radius, size }: CommonProps) {
   const initial = (name.trim().charAt(0) || '?').toUpperCase();
 
   return (

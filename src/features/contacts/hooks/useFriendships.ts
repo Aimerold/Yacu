@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import type {
+  FriendRelation,
+  FriendshipRequest,
+} from '@/services/friendship.service';
 import {
   cancelFriendRequest,
   getFriends,
@@ -13,10 +14,9 @@ import {
   sendFriendRequest,
   subscribeToFriendshipChanges,
 } from '@/services/friendship.service';
-import type {
-  FriendRelation,
-  FriendshipRequest,
-} from '@/services/friendship.service';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 const RELOAD_DEBOUNCE_MS = 250;
 const POLL_MS = 30000;
@@ -129,8 +129,11 @@ export function useFriendships({
 
   // Utilise la dernière version de refresh sans recréer l'abonnement
   // à chaque changement des résultats de recherche.
+  // CORRECTION : on met à jour la ref dans un effet, pas pendant le rendu.
   const refreshRef = useRef(refresh);
-  refreshRef.current = refresh;
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
 
   // Au focus : chargement, Realtime, rechargement périodique
   // et rattrapage au retour au premier plan.

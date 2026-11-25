@@ -1,4 +1,3 @@
-
 import { supabase } from '@/lib/supabase';
 
 export type ConversationUser = {
@@ -192,7 +191,6 @@ export async function getMyConversations(): Promise<
   );
 }
 
-
 /**
  * Récupère une conversation privée ou un groupe par son identifiant.
  */
@@ -246,7 +244,6 @@ export async function getConversationById(
   };
 }
 
-
 /** Crée ou retrouve une conversation privée. */
 export async function createDirectConversation(
   otherUserId: string
@@ -267,9 +264,6 @@ export async function createDirectConversation(
 export async function getGroupById(
   conversationId: string
 ): Promise<ConversationSummary | null> {
-  const me = await getCurrentUserId();
-
-
   const { data, error } = await supabase
     .from('conversations')
     .select(
@@ -280,13 +274,10 @@ export async function getGroupById(
     .eq('is_active', true)
     .maybeSingle();
 
-
   if (error) throw new Error(error.message);
   if (!data) return null;
 
-
   const row = data as ConversationRow;
-
 
   return {
     id: row.id,

@@ -1,3 +1,9 @@
+import {
+  AccountError,
+  resendSignupCode,
+  verifySignupCode,
+} from '@/services/auth.service';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,12 +16,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-  AccountError,
-  resendSignupCode,
-  verifySignupCode,
-} from '@/services/auth.service';
 
 const RESEND_DELAY_SECONDS = 60;
 
@@ -93,7 +93,7 @@ export default function VerifyEmailScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>Adresse manquante</Text>
           <Text style={styles.subtitle}>
-            Reviens à l'écran de connexion et recommence.
+            Reviens à l’écran de connexion et recommence.
           </Text>
           <Pressable style={styles.button} onPress={() => router.back()}>
             <Text style={styles.buttonText}>Retour</Text>
