@@ -24,7 +24,7 @@ export async function getLiveKitConnection(
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.session.access_token}`,
-        apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY as string,
+        apikey: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY as string,
       },
       body: JSON.stringify({
         callId,

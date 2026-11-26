@@ -1,2 +1,11 @@
 ﻿[functions.delete-account]
 verify_jwt = true
+
+[functions.generate-call-token]
+verify_jwt = true
+
+[functions.send-call-notification]
+verify_jwt = false
+
+[functions.send-push-notification]
+verify_jwt = false

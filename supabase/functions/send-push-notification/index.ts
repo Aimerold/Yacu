@@ -1,4 +1,3 @@
-
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -38,7 +37,12 @@ Deno.serve(async (request) => {
 
   const secret = Deno.env.get('PUSH_WEBHOOK_SECRET');
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+  const secretKeys = JSON.parse(
+    Deno.env.get('SUPABASE_SECRET_KEYS')!
+  );
+
+  const serviceKey = secretKeys['default'];
 
   if (!secret || !supabaseUrl || !serviceKey) {
     return json({ error: 'server_misconfigured' }, 500);

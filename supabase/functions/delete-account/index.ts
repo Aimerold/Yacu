@@ -1,4 +1,3 @@
-
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -81,8 +80,18 @@ Deno.serve(async (request) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+  const publishableKeys = JSON.parse(
+    Deno.env.get('SUPABASE_PUBLISHABLE_KEYS')!
+  );
+
+  const anonKey = publishableKeys['default'];
+
+  const secretKeys = JSON.parse(
+    Deno.env.get('SUPABASE_SECRET_KEYS')!
+  );
+
+  const serviceKey = secretKeys['default'];
 
   if (!supabaseUrl || !anonKey || !serviceKey) {
     console.error('delete-account: configuration serveur incomplète');

@@ -1,9 +1,13 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 
+const SUPABASE_SECRET_KEYS = JSON.parse(
+  Deno.env.get('SUPABASE_SECRET_KEYS')!
+);
+
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  SUPABASE_SECRET_KEYS['default']
 );
 
 
