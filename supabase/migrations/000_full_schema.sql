@@ -1865,19 +1865,6 @@ CREATE OR REPLACE TRIGGER "profiles_create_user_settings" AFTER INSERT ON "publi
 CREATE OR REPLACE TRIGGER "protect_call_identity_trigger" BEFORE UPDATE ON "public"."calls" FOR EACH ROW EXECUTE FUNCTION "public"."protect_call_identity"();
 
 
-
-CREATE OR REPLACE TRIGGER "push_on_message_insert" AFTER INSERT ON "public"."messages" FOR EACH ROW EXECUTE FUNCTION "supabase_functions"."http_request"('https://mifbrotcmhapuwgsvwjh.supabase.co/functions/v1/send-push-notification', 'POST', '{"Content-type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pZmJyb3RjbWhhcHV3Z3N2d2poIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MzYzNDIxNCwiZXhwIjoyMTA5MjEwMjE0fQ.dceEVji4vIO3Idx5FyrUotMQFGEx32WeBy9YMBgs60E","x-webhook-secret":"afdb1a8ce1714ca49e1520c4c6740b7f8d3150c2c597450b988cb20996317ccc"}', '{}', '5000');
-
-
-
-CREATE OR REPLACE TRIGGER "send-call-notification" AFTER INSERT ON "public"."calls" FOR EACH ROW EXECUTE FUNCTION "supabase_functions"."http_request"('https://mifbrotcmhapuwgsvwjh.supabase.co/functions/v1/send-call-notification', 'POST', '{"Content-type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pZmJyb3RjbWhhcHV3Z3N2d2poIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MzYzNDIxNCwiZXhwIjoyMTA5MjEwMjE0fQ.dceEVji4vIO3Idx5FyrUotMQFGEx32WeBy9YMBgs60E"}', '{}', '5000');
-
-
-
-CREATE OR REPLACE TRIGGER "user_settings_updated_at" BEFORE UPDATE ON "public"."user_settings" FOR EACH ROW EXECUTE FUNCTION "public"."user_settings_set_updated_at"();
-
-
-
 ALTER TABLE ONLY "public"."blocked_users"
     ADD CONSTRAINT "blocked_users_blocked_id_fkey" FOREIGN KEY ("blocked_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
 
